@@ -1,44 +1,42 @@
-"""Topographic contour interpretation."""
+"""Importance-aware vector-like Contour artwork."""
 
 from typing import Mapping
 
-import cv2
-import numpy as np
 from PIL import Image
 
-from recraft.styles.base import ArtStyle, Parameter, ParameterValue
 from recraft.engine.analysis_result import ImageAnalysis
+from recraft.styles.base import ArtStyle, Parameter, ParameterValue
+from recraft.styles.contour_geometry import ContourResult, ContourSettings, extract_contours, render_contours
 
 
 class ContourStyle(ArtStyle):
-    """Draw isolines at evenly spaced brightness levels."""
+    """Generate deliberate brightness-band paths using combined importance."""
 
     identifier = "contour"
     display_name = "Contour"
-    description = "Rebuild brightness as layered topographic lines."
-    parameters = (Parameter("density", "Contour density", 12, 3, 30),)
+    description = "Build clean, importance-aware brightness-band line artwork."
+    parameters = (
+        Parameter("detail", "Detail", 14, 4, 30),
+        Parameter("smoothing", "Smoothing", 2.0, 0.5, 6.0, 0.25),
+        Parameter("subject_emphasis", "Subject emphasis", 0.75, 0.0, 1.0, 0.05),
+        Parameter("background_reduction", "Background reduction", 0.65, 0.0, 1.0, 0.05),
+        Parameter("line_weight", "Line weight", 1, 1, 5),
+        Parameter("simplification", "Simplification", 1.0, 0.1, 5.0, 0.1),
+        Parameter("major_only", "Major contours only", 0, 0, 1),
+        Parameter("invert", "Invert", 0, 0, 1),
+    )
+
+    def generate(self, analysis: ImageAnalysis, parameters: Mapping[str, ParameterValue] | None = None) -> ContourResult:
+        """Generate reusable Contour paths from Image DNA."""
+        values = self.validate_parameters(parameters)
+        settings = ContourSettings(
+            detail=int(values["detail"]), smoothing=float(values["smoothing"]),
+            subject_emphasis=float(values["subject_emphasis"]), background_reduction=float(values["background_reduction"]),
+            line_weight=int(values["line_weight"]), simplification=float(values["simplification"]),
+            major_only=bool(values["major_only"]), invert=bool(values["invert"]),
+        )
+        return extract_contours(analysis, settings)
 
     def process(self, analysis: ImageAnalysis, parameters: Mapping[str, ParameterValue] | None = None) -> Image.Image:
         values = self.validate_parameters(parameters)
-        grey_map = analysis.map_at_image_size(analysis.enhanced_greyscale)
-        grey = cv2.GaussianBlur((grey_map * 255).astype(np.uint8), (7, 7), 0)
-        importance = analysis.map_at_image_size(analysis.importance_map)
-        canvas = np.full((*grey.shape, 3), 248, dtype=np.uint8)
-        density = int(values["density"])
-        for index, level in enumerate(np.linspace(15, 240, density, dtype=np.uint8)):
-            mask = np.where(grey >= level, 255, 0).astype(np.uint8)
-            contours, _ = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-            shade = int(35 + 100 * (int(level) / 255))
-            kept = []
-            for contour in contours:
-                if cv2.arcLength(contour, True) < 12 or abs(cv2.contourArea(contour)) < 8:
-                    continue
-                points = contour[:, 0, :]
-                mean_importance = float(importance[points[:, 1], points[:, 0]].mean())
-                if mean_importance >= 0.12 or index % 2 == 0:
-                    kept.append(cv2.approxPolyDP(contour, 0.7, True))
-            cv2.drawContours(canvas, kept, -1, (shade, shade, shade), 1, cv2.LINE_AA)
-        edges = analysis.map_at_image_size(analysis.edge_map)
-        detail_edges = np.where((edges > 0.3) & (importance > 0.55), 40, 0).astype(np.uint8)
-        canvas[detail_edges > 0] = (40, 40, 40)
-        return Image.fromarray(canvas, "RGB")
+        return render_contours(self.generate(analysis, values), int(values["line_weight"]))

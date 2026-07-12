@@ -301,8 +301,8 @@ Known limitations:
   currently empty.
 - Subject/background segmentation is a general saliency-based first version,
   not a semantic neural-network object detector.
-- User importance/additive/subtractive masks are supported by the engine model,
-  but painting tools are intentionally not built yet.
+- User importance/additive/subtractive masks were initially model-only; the
+  subsequent changelog below records the completed painting tools.
 
 Exact local update and verification:
 
@@ -320,3 +320,72 @@ Manual Engine checks:
 4. Confirm important edges/subjects retain more local detail.
 5. Export a PNG and verify it contains artwork at configured dimensions rather
    than the selected developer map.
+
+
+USER IMPORTANCE + CONTOUR PHYSICAL ART CHANGELOG — 12 JULY 2026
+
+Added a non-destructive importance override workflow and made Contour the first
+path-native physical-art style.
+
+Engine additions:
+
+- user_importance.py: bounded source-space add/reduce masks, add/reduce/erase
+  brushes, prepared-canvas inverse mapping, aligned rendering, weighting, and
+  background suppression.
+- colour_selection.py: Lab similarity, tolerance, feather, connected-only.
+- region_selection.py: connected Lab visual-region growth with feather.
+
+Contour and export additions:
+
+- contour_geometry.py: ContourPath/ContourResult, smoothed brightness bands,
+  length/tiny-loop/background filtering, importance retention, simplification,
+  PNG rendering, and diagnostics.
+- contour_mesh.py: millimetre raised ridges created from paths, flat base, side
+  walls, printable-width validation, STL writing, and watertight validation.
+- mesh_worker.py: background path generation, mesh creation, validation, export,
+  errors, and summary signals.
+
+UI workflow:
+
+- Paint Add, Reduce, or Erase-to-automatic on the prepared image.
+- Configure brush and automatic/user/background strengths; show/hide overlay or
+  clear user edits.
+- Pick a colour or connected region, preview, then Add, Reduce, or Cancel.
+- Source-space masks remain aligned through preparation and export transforms.
+- Added combined/user/selection/path developer diagnostics.
+- Added Contour-only physical width, base, ridge height/width, border, and STL
+  export controls with dimensions, mesh counts, watertightness, and path report.
+
+Contour controls are Detail, Smoothing, Subject Emphasis, Background Reduction,
+Line Weight, Simplification, Major Contours Only, and Invert. ContourResult paths
+drive both PNG and STL; STL never re-detects lines from raster output.
+
+Dependency: trimesh>=4.4.
+
+Tests cover brushes, transformed mask alignment, colour/region selection,
+normalization and strong overrides, path extraction/filtering/simplification,
+background suppression, PNG rendering, physical dimensions, watertight STL,
+minimum ridge width, invalid geometry, mesh worker export, and existing styles.
+Final validation: 62 tests passed on Python 3.14.6, followed by compilation,
+imports, off-screen UI, importance-aware PNG, true background STL with
+watertightness confirmation, and timed startup smoke checks.
+
+Known limitations:
+
+- Visual selection is not semantic object detection.
+- Importance editing has erase/clear but not undo/redo history yet.
+- STL supports Contour raised ridges only; engraved channels are deferred.
+- Ridges use a controlled grid representation of actual paths, so very fine
+  curves are bounded by mesh resolution.
+- No 3D viewport is included; inspect STL in a slicer.
+- Face detection still depends on OpenCV detector availability.
+
+Exact local commands:
+
+  git pull origin main
+  .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+  .\.venv\Scripts\python.exe -m pytest
+  .\.venv\Scripts\python.exe -m recraft
+
+Private golden-image testing is in docs/GOLDEN_IMAGE_TESTING.md. Never commit the
+private photograph or private derivative artifacts.

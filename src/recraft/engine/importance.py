@@ -40,7 +40,7 @@ def apply_user_masks(
         if mask is not None and mask.shape != automatic.shape:
             raise ValueError(f"User {name} mask must match the analysis dimensions")
     if importance_mask is not None:
-        result = np.maximum(result, np.clip(importance_mask, 0, 1))
+        result = np.clip(importance_mask, 0, 1).astype(np.float32).copy()
     if additive_brush is not None:
         result += np.clip(additive_brush, 0, 1)
     if subtractive_brush is not None:

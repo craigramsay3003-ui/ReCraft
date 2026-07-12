@@ -85,3 +85,27 @@ renders reusable maps without changing PNG export behavior.
 ## Future exporters and mesh generation
 
 Exporters should consume processing results without depending on the UI. Vector exporters can initially consume style-specific paths, while a later geometry layer can translate depth maps or procedural primitives into validated meshes. Keeping these layers separate prevents manufacturing concerns from complicating image interpretation.
+
+## User importance and assisted selection
+
+`UserImportanceState` stores additive/subtractive masks in a bounded proxy of
+original-source coordinates. `canvas_to_source` inversely maps prepared-view
+strokes through crop, Fit/Fill, pan, zoom, rotation, and flips. The same masks
+are transformed forward for preview or export. Combined importance applies
+automatic strength, user additions/reductions, and background suppression,
+then clamps deterministically to 0..1.
+
+`colour_selection.py` uses Lab distance; `region_selection.py` retains a
+connected visual region. Both are UI-independent and preview before application.
+
+## Contour geometry and mesh export
+
+Contour extracts smoothed luminance iso-levels into `ContourPath`, then filters
+by length, enclosed area, background evidence, spacing, and combined importance.
+`ContourResult` retains raw and filtered paths as the source for diagnostics,
+PNG, future SVG, and physical geometry.
+
+`contour_mesh.py` maps paths into millimetres and builds a continuous raised
+ridge top, flat base, and closed side walls. `trimesh` validates watertightness
+before STL output. `MeshWorker` performs generation, validation, and writing off
+the UI thread. Mesh export is intentionally Contour-only.

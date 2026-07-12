@@ -8,6 +8,7 @@ from recraft.core.image_transform import ImageTransformSettings, prepare_image
 from recraft.styles.base import ArtStyle, ParameterValue
 from recraft.engine import analyse_image
 from recraft.engine.analysis_result import ImageAnalysis
+from recraft.engine.user_importance import UserImportanceState, apply_user_importance
 
 
 def preview_size(settings: ImageTransformSettings, maximum: int = 800) -> tuple[int, int]:
@@ -30,9 +31,11 @@ def render_style_preview(
     style: ArtStyle,
     parameters: Mapping[str, ParameterValue] | None = None,
     maximum: int = 800,
+    user_importance: UserImportanceState | None = None,
 ) -> Image.Image:
     """Prepare at preview resolution and pass that canvas to a style."""
     analysis = analyse_image(render_prepared_preview(source, settings, maximum))
+    analysis = apply_user_importance(analysis, user_importance, settings)
     return style.process(analysis, parameters)
 
 
@@ -41,15 +44,19 @@ def render_style_export(
     settings: ImageTransformSettings,
     style: ArtStyle,
     parameters: Mapping[str, ParameterValue] | None = None,
+    user_importance: UserImportanceState | None = None,
 ) -> Image.Image:
     """Prepare and process directly at configured full export resolution."""
     prepared = prepare_image(source, settings)
     analysis = analyse_image(prepared)
+    analysis = apply_user_importance(analysis, user_importance, settings)
     return style.process(analysis, parameters)
 
 
 def analyse_prepared_preview(
-    source: Image.Image, settings: ImageTransformSettings, maximum: int = 800
+    source: Image.Image, settings: ImageTransformSettings, maximum: int = 800,
+    user_importance: UserImportanceState | None = None,
 ) -> ImageAnalysis:
     """Prepare and analyse one interactive working canvas."""
-    return analyse_image(render_prepared_preview(source, settings, maximum))
+    analysis = analyse_image(render_prepared_preview(source, settings, maximum))
+    return apply_user_importance(analysis, user_importance, settings)

@@ -37,6 +37,36 @@ landmark model. No portrait assumption is used for subject detection.
 - Background style rendering and PNG writing keep the interface responsive.
 - A developer view can preview edges, importance, face/background/subject masks,
   saliency, colour clusters, and texture.
+
+## User importance editing
+
+The **Importance** panel lets the user override automatic analysis without
+altering the source. Paint Add, Reduce, or Erase-to-automatic directly on the
+prepared preview. Configure brush size/strength, automatic/user weighting,
+background suppression, overlay visibility, or clear all edits. Masks use
+source coordinates and stay aligned after crop, pan, zoom, rotation, flips,
+preview resizing, and full-resolution export.
+
+**Pick Colour** selects perceptually similar Lab colours with tolerance,
+feather, and connected-only controls. **Pick Region** grows a connected visual
+region. Preview either selection, then Add, Reduce, or Cancel. These are visual
+selection tools, not semantic object recognition.
+
+Developer views now include automatic/combined importance, add/reduce masks,
+background suppression, selection previews, raw/filtered Contour paths, and
+Contour path importance.
+
+## Contour STL export
+
+Contour produces reusable vector-like paths. The same result drives PNG and
+raised-ridge STL output; lines are never re-detected from a PNG. Select Contour,
+configure physical width, base thickness, ridge height/width, and border, then
+choose **Export Contour STL**. ReCraft generates in the background, validates
+watertightness, and reports millimetre dimensions, vertices, faces, and path.
+
+STL currently supports Contour only. Inspect every STL in a slicer before
+printing. ReCraft enforces a default 0.8 mm minimum ridge width, but the correct
+minimum depends on printer and material.
 - Contour, Halftone, and Fragment procedural styles.
 - Style-specific controls generated from reusable style metadata.
 - PNG export and a processing API independent of the interface.

@@ -4,11 +4,15 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from PIL import Image
+import numpy as np
 from PySide6.QtCore import QObject, Signal, Slot
 
 from recraft.core.image_transform import ImageTransformSettings
 from recraft.core.prepared_image import analyse_prepared_preview, render_style_export, render_style_preview
 from recraft.styles.base import ArtStyle, ParameterValue
+from recraft.engine.user_importance import UserImportanceState
+from recraft.engine.user_importance import render_source_mask
+from recraft.styles.contour_geometry import contour_importance_image, render_contours
 
 
 class RenderWorker(QObject):
@@ -27,6 +31,7 @@ class RenderWorker(QObject):
         parameters: Mapping[str, ParameterValue],
         export_path: str | None = None,
         debug_view: str | None = None,
+        user_importance: UserImportanceState | None = None,
     ) -> None:
         super().__init__()
         self._source = source.copy()
@@ -35,6 +40,7 @@ class RenderWorker(QObject):
         self._parameters = dict(parameters)
         self._export_path = export_path
         self._debug_view = debug_view
+        self._user_importance = user_importance
 
     @Slot()
     def run(self) -> None:
@@ -42,16 +48,33 @@ class RenderWorker(QObject):
         try:
             if self._export_path is None:
                 if self._debug_view:
-                    analysis = analyse_prepared_preview(self._source, self._settings)
-                    result = analysis.debug_image(self._debug_view)
+                    analysis = analyse_prepared_preview(self._source, self._settings, user_importance=self._user_importance)
+                    if self._debug_view in ("Raw Contour Paths", "Filtered Contour Paths", "Contour Importance View"):
+                        generator = getattr(self._style, "generate", None)
+                        if generator is None: raise ValueError("Contour diagnostics require the Contour style")
+                        contours = generator(analysis, self._parameters)
+                        if self._debug_view == "Raw Contour Paths": result = render_contours(contours, raw=True)
+                        elif self._debug_view == "Filtered Contour Paths": result = render_contours(contours)
+                        else: result = contour_importance_image(contours)
+                    elif self._debug_view in ("Colour Selection Preview", "Region Selection Preview"):
+                        source_mask = None
+                        if self._user_importance is not None:
+                            source_mask = self._user_importance.colour_preview if self._debug_view.startswith("Colour") else self._user_importance.region_preview
+                        if source_mask is None:
+                            result = Image.new("RGB", analysis.image.size, "black")
+                        else:
+                            mask = render_source_mask(source_mask, self._settings, analysis.image.size)
+                            result = Image.fromarray(np.clip(mask * 255, 0, 255).astype(np.uint8), "L").convert("RGB")
+                    else:
+                        result = analysis.debug_image(self._debug_view)
                 else:
                     result = render_style_preview(
-                        self._source, self._settings, self._style, self._parameters
+                        self._source, self._settings, self._style, self._parameters, user_importance=self._user_importance
                     )
                 self.preview_ready.emit(result)
             else:
                 result = render_style_export(
-                    self._source, self._settings, self._style, self._parameters
+                    self._source, self._settings, self._style, self._parameters, user_importance=self._user_importance
                 )
                 result.save(self._export_path, "PNG")
                 self.export_ready.emit(

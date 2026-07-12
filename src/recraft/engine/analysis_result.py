@@ -73,6 +73,11 @@ class ImageAnalysis:
         maps = {
             "Edge Map": self.edge_map,
             "Importance Map": self.importance_map,
+            "Automatic Importance": self.automatic_importance,
+            "Combined Importance": self.importance_map,
+            "User Add Mask": self.additive_brush_mask if self.additive_brush_mask is not None else np.zeros_like(self.automatic_importance),
+            "User Reduce Mask": self.subtractive_brush_mask if self.subtractive_brush_mask is not None else np.zeros_like(self.automatic_importance),
+            "Background Suppression": self.background_mask,
             "Face Mask": self.face_mask,
             "Background Mask": self.background_mask,
             "Saliency": self.saliency_map,
