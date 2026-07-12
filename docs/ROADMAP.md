@@ -33,3 +33,9 @@ Depth-map generation, relief meshes, STL export, and 3MF investigation.
 ## Phase 1.0
 
 A polished desktop application with saved presets, an installer, a gallery, and physical-print validation.
+
+## Experimental Contour relief branch
+
+`feature/contour-workflow-relief` adds the guided workflow, variable relief,
+independent materials, coloured 3MF, stage-aware caching, and corrected shared
+mesh orientation. It remains separate from stable main pending review.

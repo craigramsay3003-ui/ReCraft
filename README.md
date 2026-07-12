@@ -67,6 +67,18 @@ watertightness, and reports millimetre dimensions, vertices, faces, and path.
 STL currently supports Contour only. Inspect every STL in a slicer before
 printing. ReCraft enforces a default 0.8 mm minimum ridge width, but the correct
 minimum depends on printer and material.
+
+## Guided Contour relief workflow
+
+Contour uses five progressive stages—Prepare, Importance, Design, Relief, and
+Preview/Export—with a persistent prepared canvas and Back/Next navigation.
+Important path sections rise higher than background structure using bounded,
+smoothed relief values; uniform height remains available for comparison.
+
+Choose independent Base and Contour colours for the shaded mesh preview. STL is
+geometry-only; coloured 3MF stores Base and Contour Relief material assignments.
+Mesh X preserves image left/right and image Y is converted to Cartesian Y. See
+`docs/CONTOUR_WORKFLOW.md`.
 - Contour, Halftone, and Fragment procedural styles.
 - Style-specific controls generated from reusable style metadata.
 - PNG export and a processing API independent of the interface.

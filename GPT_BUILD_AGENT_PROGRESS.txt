@@ -440,3 +440,28 @@ Exact install command:
 For future tasks, “build the latest version” means run this complete tests-first
 release workflow after implementing the requested code and overwrite the prior
 generated executable and installer.
+
+
+FEATURE BRANCH — GUIDED CONTOUR RELIEF — 12 JULY 2026
+
+Branch: feature/contour-workflow-relief, created from stable main 4a479ff and
+pushed with upstream tracking. Do not merge without explicit instruction.
+
+- Five-stage guided workflow with persistent canvas, Back/Next, preserved
+  settings, collapsed Advanced controls, and separate diagnostics.
+- Dependency-aware state: preparation invalidates all downstream work;
+  importance/art invalidates paths/mesh; relief invalidates mesh; colours redraw
+  materials without regenerating geometry.
+- ContourPath carries peak importance, subject/background membership, and a
+  smoothed per-point relief profile.
+- Variable heights combine importance, subject/face evidence, contrast, and
+  inverse background, then apply relief/background controls and safe mm bounds.
+- Uniform-height compatibility, height smoothing, printable minimum, curve
+  quality, physical height calculation, and developer orientation arrow.
+- Independent Base/Contour colours, resettable pickers, shaded mesh preview,
+  geometry-only STL explanation, and coloured 3MF material assignments.
+- Orientation keeps X unchanged and inverts image Y into Cartesian +Y for the
+  shared preview/STL/3MF mesh; this is not a camera workaround.
+- Added Contour Height diagnostics and synthetic orientation/material tests.
+
+See docs/CONTOUR_WORKFLOW.md for the staged workflow and calculations.
