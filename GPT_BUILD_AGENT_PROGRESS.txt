@@ -95,3 +95,83 @@ SUGGESTED NEXT STEPS
 6. Improve Fragment sampling and add further styles such as Voronoi or flow
    fields.
 7. Begin SVG/vector export only after the 2D processing workflow is stable.
+
+
+IMAGE PREPARATION UPDATE — 12 JULY 2026
+
+Added a non-destructive preparation stage before every art style:
+
+  imported image -> preparation -> prepared canvas -> style -> preview/export
+
+The original full-resolution image remains unchanged in memory. Transformation
+settings are stored independently, and every preview or export is regenerated
+from the original source.
+
+Features added:
+
+- Fixed output/crop viewport with mouse-drag pan and mouse-wheel zoom.
+- Numeric pan and zoom controls.
+- Rotate left/right by 90 degrees without cumulative resampling.
+- Horizontal and vertical flips.
+- Reset to a valid centred source composition.
+- Aspect lock and output width/height controls.
+- Original, Square 1:1, Portrait 4:5, Portrait 2:3, Landscape 3:2, and
+  Landscape 16:9 presets.
+- Fit full image and Fill frame modes.
+- Small interactive prepared/style previews, separate from full-resolution PNG
+  rendering.
+- Full export regenerates preparation and style output at configured dimensions;
+  it never enlarges the rendered preview.
+- Maximum output size is 8,000 pixels per dimension to reduce accidental memory
+  exhaustion.
+
+Files added:
+
+- src/recraft/core/image_transform.py
+- src/recraft/core/prepared_image.py
+- tests/test_image_transform.py
+- tests/test_prepared_image.py
+
+Files changed:
+
+- src/recraft/ui/image_view.py
+- src/recraft/ui/main_window.py
+- README.md
+- docs/ARCHITECTURE.md
+- docs/ROADMAP.md
+- GPT_BUILD_AGENT_PROGRESS.txt
+
+Automated validation:
+
+- 32 pytest tests passed, including immutability, output sizes, presets,
+  Fit/Fill, zoom, pan, rotation, flips, reset, invalid settings, very small
+  images, style integration, and independent export resolution.
+- Source compilation, imports, off-screen window creation, preparation smoke
+  rendering, and timed off-screen module startup were also required before the
+  update commit.
+
+Known limitations:
+
+- Crop uses a robust fixed aspect-ratio viewport rather than freely draggable
+  crop handles.
+- Processing is synchronous; high-resolution style export can temporarily make
+  the window unresponsive.
+- Fit mode uses white for uncovered canvas areas.
+- The preview limit is 800 pixels on its longest side.
+
+Exact local testing steps (not yet run by the user):
+
+  git pull origin main
+  python -m venv .venv
+  .venv\Scripts\activate
+  python -m pip install -e ".[dev]"
+  pytest
+  python -m recraft
+
+Manual checks after launch:
+
+1. Open a photograph and confirm the prepared preview appears.
+2. Try every aspect preset and switch between Fill and Fit.
+3. Zoom with the wheel, drag to pan, rotate, flip, and reset.
+4. Set an output size such as 1200 x 800 and generate each style preview.
+5. Save a PNG and confirm its dimensions match the configured output size.

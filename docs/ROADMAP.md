@@ -2,11 +2,16 @@
 
 ## Phase 0.1
 
-Image loading, modular styles, preview, PNG export, Contour, Halftone, and Fragment.
+Completed: image loading, non-destructive preparation, fixed crop viewport,
+pan, zoom, rotation, flips, aspect-ratio presets, Fit/Fill, independent preview
+and export resolution, modular styles, preview, PNG export, Contour, Halftone,
+and Fragment.
 
 ## Phase 0.2
 
-Improved parameter controls, project files, undo and redo, batch processing, and better performance.
+Project files, undo and redo, batch processing, asynchronous rendering, and
+better performance. Initial image-preparation parameter controls moved into and
+completed in Phase 0.1.
 
 ## Phase 0.3
 

@@ -11,6 +11,9 @@ ReCraft is an early experimental desktop prototype for interpreting images as pr
 ## Current prototype features
 
 - Load common image formats and compare the original with a generated preview.
+- Non-destructively crop, pan, zoom, rotate, and flip before applying a style.
+- Original, 1:1, 4:5, 2:3, 3:2, and 16:9 output framing with Fit or Fill.
+- Independent preview and full-resolution export rendering.
 - Contour, Halftone, and Fragment procedural styles.
 - Style-specific controls generated from reusable style metadata.
 - PNG export and a processing API independent of the interface.
@@ -19,10 +22,20 @@ Version 0.1 produces 2D images only.
 
 ## Example workflow
 
-1. Select **Open Image** and choose a photograph.
-2. Choose a style and adjust its parameters.
-3. Select **Generate** to create a preview.
-4. Select **Save Output** to export a PNG.
+1. Select **Open Image** and choose a photograph. The imported source remains
+   unchanged in memory.
+2. In **Prepare Image**, choose an aspect ratio and output width/height. Use
+   the fixed crop viewport with Fit or Fill, then zoom, drag to pan, rotate, or
+   flip until the composition is right.
+3. Choose a style and adjust its parameters.
+4. Select **Generate Preview**. The style processes the prepared image, not the
+   raw source.
+5. Select **Save Full-Resolution PNG**. ReCraft regenerates the preparation and
+   style at the configured export dimensions rather than upscaling the preview.
+
+Reset restores a centred, unrotated, unflipped composition matching the source
+dimensions. Output width and height must be positive and each is limited to
+8,000 pixels to reduce the risk of accidental memory exhaustion.
 
 ## Installation
 
@@ -52,7 +65,11 @@ pytest
 
 ## Project structure
 
-Processing code lives in `src/recraft/core` and `src/recraft/styles`; the PySide6 interface lives in `src/recraft/ui`. Tests and design documentation are kept in `tests` and `docs`.
+Processing code lives in `src/recraft/core` and `src/recraft/styles`; the
+PySide6 interface lives in `src/recraft/ui`. `image_transform.py` owns the
+non-destructive preparation model and renderer, while `prepared_image.py`
+connects prepared canvases to preview and export style processing. Tests and
+design documentation are kept in `tests` and `docs`.
 
 ## Adding a new art style
 
