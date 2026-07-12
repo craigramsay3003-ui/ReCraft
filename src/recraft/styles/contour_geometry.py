@@ -21,6 +21,7 @@ class ContourPath:
     subject_membership: float = 0.0
     background_membership: float = 0.0
     relief_values: tuple[float, ...] = ()
+    width_values: tuple[float, ...] = ()
 
     @property
     def length(self) -> float:
@@ -28,6 +29,13 @@ class ContourPath:
         points = np.asarray(self.points, dtype=np.float32)
         return float(np.linalg.norm(np.diff(points, axis=0), axis=1).sum())
 
+
+@dataclass(frozen=True)
+class PathDiagnostic:
+    """Explain a path retention and physical-emphasis decision."""
+
+    retained: bool
+    reasons: tuple[str, ...]
 
 @dataclass(frozen=True)
 class ContourResult:
@@ -38,6 +46,7 @@ class ContourResult:
     paths: tuple[ContourPath, ...]
     raw_paths: tuple[ContourPath, ...]
     source_aspect_ratio: float
+    diagnostics: tuple[PathDiagnostic, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -54,6 +63,8 @@ class ContourSettings:
     minimum_path_length: float = 10.0
     invert: bool = False
     major_only: bool = False
+    width_variation_strength: float = 0.5
+    uniform_width: bool = False
 
 
 def extract_contours(analysis: ImageAnalysis, settings: ContourSettings) -> ContourResult:
@@ -67,7 +78,7 @@ def extract_contours(analysis: ImageAnalysis, settings: ContourSettings) -> Cont
     subject = analysis.map_at_image_size(analysis.subject_mask)
     face = analysis.map_at_image_size(analysis.face_mask)
     contrast = analysis.map_at_image_size(analysis.local_contrast)
-    raw: list[ContourPath] = []; kept: list[ContourPath] = []
+    raw: list[ContourPath] = []; kept: list[ContourPath] = []; diagnostics: list[PathDiagnostic] = []
     levels = np.linspace(18, 237, max(3, settings.detail))
     min_length = max(settings.minimum_path_length, min(analysis.image.size) * 0.018)
     for level_index, level in enumerate(levels):
@@ -94,21 +105,30 @@ def extract_contours(analysis: ImageAnalysis, settings: ContourSettings) -> Cont
                 if kernel >= 3:
                     local_relief = cv2.GaussianBlur(local_relief.reshape(1, -1), (kernel, 1), 0).ravel()
             local_relief = np.clip(local_relief, 0, 1)
+            local_width = np.clip(.7 + .45 * importance[sy, sx] + .25 * subject[sy, sx] - .25 * background[sy, sx], .5, 1.5)
+            if settings.uniform_width: local_width = np.ones_like(local_width)
+            else: local_width = 1 + (local_width - 1) * settings.width_variation_strength
             path = ContourPath(
                 tuple((float(x), float(y)) for x, y in simplified), float(level / 255), sampled_importance, closed,
                 peak_importance, float(subject[points[:, 1], points[:, 0]].mean()), sampled_background,
                 tuple(float(value) for value in local_relief),
+                tuple(float(value) for value in local_width),
             )
-            raw.append(path)
+            reasons: list[str] = []; retained = True
             required = min_length * (1.7 - settings.subject_emphasis * sampled_importance)
             required *= 1 + settings.background_reduction * sampled_background * 2
             if settings.major_only: required *= 2.2
-            if path.length < required: continue
-            if closed and abs(cv2.contourArea(contour)) < required * 1.5: continue
-            if sampled_background > 0.65 and sampled_importance < 0.35 and level_index % 3: continue
-            if level_index % max(1, round(settings.minimum_spacing / 3)) and sampled_importance < 0.52: continue
-            kept.append(path)
-    return ContourResult(analysis.image.width, analysis.image.height, tuple(kept), tuple(raw), analysis.image.width / analysis.image.height)
+            if path.length < required: retained = False; reasons.append("removed: shorter than the importance-adjusted printable path length")
+            if closed and abs(cv2.contourArea(contour)) < required * 1.5: retained = False; reasons.append("removed: tiny enclosed loop")
+            if sampled_background > 0.65 and sampled_importance < 0.35 and level_index % 3: retained = False; reasons.append("removed: low-value repeated background structure")
+            if level_index % max(1, round(settings.minimum_spacing / 3)) and sampled_importance < 0.52: retained = False; reasons.append("removed: minimum band spacing in low-importance area")
+            if retained:
+                reasons.extend(("retained: sufficient structural significance", "simplified geometrically"))
+                if sampled_importance > .55: reasons.extend(("raised: high combined importance", "widened: likely subject structure"))
+                elif sampled_background > .55: reasons.append("lowered: background evidence")
+                kept.append(path)
+            raw.append(path); diagnostics.append(PathDiagnostic(retained, tuple(reasons)))
+    return ContourResult(analysis.image.width, analysis.image.height, tuple(kept), tuple(raw), analysis.image.width / analysis.image.height, tuple(diagnostics))
 
 
 def render_contours(result: ContourResult, line_width: int = 1, raw: bool = False) -> Image.Image:

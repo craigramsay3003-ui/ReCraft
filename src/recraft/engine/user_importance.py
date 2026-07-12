@@ -37,6 +37,8 @@ class UserImportanceState:
     background_suppression: float = 0.35
     colour_preview: np.ndarray | None = None
     region_preview: np.ndarray | None = None
+    focus_add_prepared: np.ndarray | None = None
+    focus_reduce_prepared: np.ndarray | None = None
 
     @classmethod
     def create(cls, source_size: tuple[int, int]) -> "UserImportanceState":
@@ -51,6 +53,7 @@ class UserImportanceState:
         """Clear all user edits and pending selections."""
         self.add_mask.fill(0); self.reduce_mask.fill(0)
         self.colour_preview = None; self.region_preview = None
+        self.focus_add_prepared = None; self.focus_reduce_prepared = None
 
     def paint_source(self, x: float, y: float, radius: float, strength: float, mode: BrushMode) -> None:
         """Paint one circular dab using normalized source coordinates."""
@@ -149,6 +152,10 @@ def apply_user_importance(
     size = (shape[1], shape[0])
     add = render_source_mask(state.add_mask, settings, size)
     reduce = render_source_mask(state.reduce_mask, settings, size)
+    if state.focus_add_prepared is not None:
+        add = np.maximum(add, cv2.resize(state.focus_add_prepared, size, interpolation=cv2.INTER_LINEAR))
+    if state.focus_reduce_prepared is not None:
+        reduce = np.maximum(reduce, cv2.resize(state.focus_reduce_prepared, size, interpolation=cv2.INTER_LINEAR))
     combined = combine_importance(
         analysis.automatic_importance, add, reduce, analysis.background_mask,
         state.automatic_strength, state.user_strength, state.background_suppression,

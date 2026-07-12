@@ -24,6 +24,8 @@ class ContourStyle(ArtStyle):
         Parameter("simplification", "Simplification", 1.0, 0.1, 5.0, 0.1),
         Parameter("minimum_path_length", "Minimum line length", 12, 4, 100, 2),
         Parameter("minimum_spacing", "Minimum line spacing", 5.0, 1.0, 20.0, 0.5),
+        Parameter("width_variation", "Contour-width variation", 0.5, 0.0, 1.0, 0.05),
+        Parameter("uniform_width", "Uniform width", 0, 0, 1),
         Parameter("major_only", "Major contours only", 0, 0, 1),
         Parameter("invert", "Invert", 0, 0, 1),
     )
@@ -36,6 +38,7 @@ class ContourStyle(ArtStyle):
             subject_emphasis=float(values["subject_emphasis"]), background_reduction=float(values["background_reduction"]),
             line_weight=int(values["line_weight"]), simplification=float(values["simplification"]),
             minimum_path_length=float(values["minimum_path_length"]), minimum_spacing=float(values["minimum_spacing"]),
+            width_variation_strength=float(values["width_variation"]), uniform_width=bool(values["uniform_width"]),
             major_only=bool(values["major_only"]), invert=bool(values["invert"]),
         )
         return extract_contours(analysis, settings)

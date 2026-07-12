@@ -22,6 +22,10 @@ class ContourMeshSettings:
     minimum_contour_height: float = 0.4
     maximum_contour_height: float = 1.8
     ridge_width: float = 1.2
+    minimum_ridge_width: float = 0.8
+    maximum_ridge_width: float = 1.8
+    width_variation_strength: float = 0.5
+    uniform_width: bool = False
     border_width: float = 3.0
     resolution: int = 160
     minimum_feature_width: float = 0.8
@@ -38,6 +42,8 @@ class ContourMeshSettings:
         if not 0.1 <= self.minimum_contour_height <= self.maximum_contour_height: raise ValueError("Minimum contour height must be positive and no greater than maximum contour height")
         if self.maximum_contour_height > 20: raise ValueError("Maximum contour height must not exceed 20 mm")
         if not self.minimum_feature_width <= self.ridge_width <= 20: raise ValueError("Ridge width must meet the minimum printable feature width")
+        if not self.minimum_feature_width <= self.minimum_ridge_width <= self.maximum_ridge_width <= 20: raise ValueError("Contour width range must respect the minimum printable feature width")
+        if not 0 <= self.width_variation_strength <= 1: raise ValueError("Width variation strength must be between 0 and 1")
         if not 0 <= self.border_width <= 50: raise ValueError("Border width must be between 0 and 50 mm")
         if not 40 <= self.resolution <= 500: raise ValueError("Mesh resolution must be between 40 and 500")
         if not 0.1 <= self.relief_strength <= 4: raise ValueError("Relief strength must be between 0.1 and 4")
@@ -89,12 +95,21 @@ def build_contour_mesh(result: ContourResult, settings: ContourMeshSettings) -> 
         # Image X is retained; image Y is inverted into Cartesian +Y.
         points = np.asarray([(ox + x * sx, (ny - 1) - (oy + y * sy)) for x, y in path.points], np.float32)
         values = path.relief_values or tuple(path.importance for _ in path.points)
+        widths = path.width_values or tuple(1.0 for _ in path.points)
         if state.uniform_height: values = tuple(1.0 for _ in path.points)
         for index in range(max(0, len(points) - 1)):
             value = (values[min(index, len(values) - 1)] + values[min(index + 1, len(values) - 1)]) / 2
             value *= 1.0 - state.background_relief_reduction * path.background_membership
             value = float(np.clip(value, 0, 1)) ** state.relief_strength
-            cv2.line(ridge, tuple(np.rint(points[index]).astype(int)), tuple(np.rint(points[index + 1]).astype(int)), value, thickness, cv2.LINE_AA)
+            if state.uniform_width:
+                segment_width = state.ridge_width
+            else:
+                factor = (widths[min(index, len(widths) - 1)] + widths[min(index + 1, len(widths) - 1)]) / 2
+                factor = 1 + (factor - 1) * state.width_variation_strength
+                normalized = np.clip((factor - .5), 0, 1)
+                segment_width = state.minimum_ridge_width + normalized * (state.maximum_ridge_width - state.minimum_ridge_width)
+            segment_thickness = max(1, round(max(state.minimum_feature_width, segment_width) / pixel_mm))
+            cv2.line(ridge, tuple(np.rint(points[index]).astype(int)), tuple(np.rint(points[index + 1]).astype(int)), value, segment_thickness, cv2.LINE_AA)
         if path.closed and len(points) > 2:
             cv2.line(ridge, tuple(np.rint(points[-1]).astype(int)), tuple(np.rint(points[0]).astype(int)), float(np.mean(values)), thickness, cv2.LINE_AA)
     if state.orientation_marker:
