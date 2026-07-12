@@ -1,0 +1,6 @@
+"""Run ReCraft with ``python -m recraft``."""
+
+from recraft.app import main
+
+if __name__ == "__main__":
+    raise SystemExit(main())
