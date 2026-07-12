@@ -4,11 +4,12 @@ from dataclasses import replace
 from pathlib import Path
 
 from PIL import Image
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QThread, Qt
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QGridLayout,
     QGroupBox, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton,
-    QSpinBox, QVBoxLayout, QWidget,
+    QProgressBar, QSpinBox, QVBoxLayout, QWidget,
 )
 
 from recraft.core.image_loader import ImageLoadError, load_image
@@ -16,10 +17,11 @@ from recraft.core.image_transform import (
     ASPECT_RATIO_PRESETS, MAX_OUTPUT_DIMENSION, FitMode, ImageTransformSettings,
     size_for_aspect_ratio,
 )
-from recraft.core.prepared_image import render_prepared_preview, render_style_export, render_style_preview
+from recraft.core.prepared_image import render_prepared_preview
 from recraft.core.style_registry import create_default_registry
 from recraft.styles.base import ArtStyle, ParameterValue
 from recraft.ui.image_view import ImageView
+from recraft.ui.render_worker import RenderWorker
 
 
 class MainWindow(QMainWindow):
@@ -33,6 +35,8 @@ class MainWindow(QMainWindow):
         self.output_image: Image.Image | None = None
         self.transform_settings = ImageTransformSettings()
         self.parameter_widgets: dict[str, QSpinBox | QDoubleSpinBox] = {}
+        self._render_thread: QThread | None = None
+        self._render_worker: RenderWorker | None = None
         self._updating_setup = False
         self.setWindowTitle("ReCraft — Create the impossible.")
         self.resize(1250, 800)
@@ -47,13 +51,13 @@ class MainWindow(QMainWindow):
         title = QLabel("ReCraft"); title.setStyleSheet("font-size: 28px; font-weight: 700;")
         subtitle = QLabel("Create the impossible."); subtitle.setStyleSheet("font-size: 15px; color: #68717d;")
         heading.addWidget(title); heading.addWidget(subtitle); heading.addStretch()
-        open_button = QPushButton("Open Image"); open_button.clicked.connect(self._open_image)
+        self.open_button = QPushButton("Open Image"); self.open_button.clicked.connect(self._open_image)
         self.save_button = QPushButton("Save Full-Resolution PNG"); self.save_button.clicked.connect(self._save_output); self.save_button.setEnabled(False)
-        heading.addWidget(open_button); heading.addWidget(self.save_button)
+        heading.addWidget(self.open_button); heading.addWidget(self.save_button)
         root.addLayout(heading)
 
-        setup = QGroupBox("1. Prepare Image")
-        setup_layout = QGridLayout(setup)
+        self.setup_box = QGroupBox("1. Prepare Image")
+        setup_layout = QGridLayout(self.setup_box)
         self.aspect_combo = QComboBox()
         for name, ratio in ASPECT_RATIO_PRESETS.items(): self.aspect_combo.addItem(name, ratio)
         self.aspect_combo.currentIndexChanged.connect(self._aspect_changed)
@@ -75,23 +79,25 @@ class MainWindow(QMainWindow):
         for label, handler in (("Rotate left", lambda: self._rotate(-1)), ("Rotate right", lambda: self._rotate(1)), ("Flip horizontal", self._flip_horizontal), ("Flip vertical", self._flip_vertical), ("Reset", self._reset_setup)):
             button = QPushButton(label); button.clicked.connect(handler); actions.addWidget(button)
         setup_layout.addLayout(actions, 3, 0, 1, 6)
-        root.addWidget(setup)
+        root.addWidget(self.setup_box)
 
-        style_box = QGroupBox("2. Apply Art Style")
-        style_layout = QHBoxLayout(style_box)
+        self.style_box = QGroupBox("2. Apply Art Style")
+        style_layout = QHBoxLayout(self.style_box)
         self.style_combo = QComboBox()
         for style in self.registry: self.style_combo.addItem(style.display_name, style.identifier)
         self.style_combo.currentIndexChanged.connect(self._rebuild_parameters)
         self.description = QLabel(); self.parameter_container = QWidget(); self.parameter_form = QFormLayout(self.parameter_container)
-        generate = QPushButton("Generate Preview"); generate.clicked.connect(self._generate)
-        style_layout.addWidget(QLabel("Style")); style_layout.addWidget(self.style_combo); style_layout.addWidget(self.description, 1); style_layout.addWidget(self.parameter_container); style_layout.addWidget(generate)
-        root.addWidget(style_box)
+        self.generate_button = QPushButton("Generate Preview"); self.generate_button.clicked.connect(self._generate)
+        style_layout.addWidget(QLabel("Style")); style_layout.addWidget(self.style_combo); style_layout.addWidget(self.description, 1); style_layout.addWidget(self.parameter_container); style_layout.addWidget(self.generate_button)
+        root.addWidget(self.style_box)
 
         panels = QHBoxLayout()
         left = QVBoxLayout(); left.addWidget(QLabel("Prepared image — wheel to zoom, drag to pan")); self.prepared_view = ImageView("Open an image to begin", interactive=True); left.addWidget(self.prepared_view)
         self.prepared_view.zoom_requested.connect(self._gesture_zoom); self.prepared_view.pan_requested.connect(self._gesture_pan)
         right = QVBoxLayout(); right.addWidget(QLabel("Transformed preview")); self.output_view = ImageView("Generate a style preview"); right.addWidget(self.output_view)
         panels.addLayout(left); panels.addLayout(right); root.addLayout(panels, 1)
+        self.progress = QProgressBar(); self.progress.setRange(0, 0); self.progress.setMaximumWidth(180); self.progress.hide()
+        self.statusBar().addPermanentWidget(self.progress)
         self.setCentralWidget(central); self.statusBar().showMessage("Ready — open an image to begin")
 
     def _current_style(self) -> ArtStyle:
@@ -182,17 +188,88 @@ class MainWindow(QMainWindow):
 
     def _generate(self) -> None:
         if self.source_image is None: QMessageBox.information(self, "No image", "Open an image before generating artwork."); return
-        try:
-            self.output_image = render_style_preview(self.source_image, self.transform_settings, self._current_style(), self._style_parameters())
-            self.output_view.set_image(self.output_image); self.statusBar().showMessage(f"Generated {self._current_style().display_name} preview at {self.output_image.width} × {self.output_image.height}")
-        except (ValueError, RuntimeError) as exc: QMessageBox.critical(self, "Generation failed", str(exc))
+        self._start_render(export_path=None)
 
     def _save_output(self) -> None:
         if self.source_image is None: return
         filename, _ = QFileDialog.getSaveFileName(self, "Save output", "recraft-output.png", "PNG image (*.png)")
         if not filename: return
         if not filename.lower().endswith(".png"): filename += ".png"
+        self._start_render(export_path=filename)
+
+    def _start_render(self, export_path: str | None) -> None:
+        """Start one preview or export job on a background Qt thread."""
+        if self.source_image is None or self._render_thread is not None:
+            return
         try:
-            result = render_style_export(self.source_image, self.transform_settings, self._current_style(), self._style_parameters())
-            result.save(filename, "PNG"); self.statusBar().showMessage(f"Saved {Path(filename).name} at {result.width} × {result.height}")
-        except (OSError, ValueError, RuntimeError) as exc: QMessageBox.critical(self, "Could not save output", str(exc))
+            settings = self._settings_from_controls()
+            style = self._current_style()
+            parameters = self._style_parameters()
+        except ValueError as exc:
+            QMessageBox.warning(self, "Invalid settings", str(exc))
+            return
+
+        thread = QThread(self)
+        worker = RenderWorker(
+            self.source_image, settings, style, parameters, export_path
+        )
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.preview_ready.connect(self._preview_finished)
+        worker.export_ready.connect(self._export_finished)
+        worker.failed.connect(self._render_failed)
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(self._render_cleanup)
+        thread.finished.connect(thread.deleteLater)
+        self._render_thread = thread
+        self._render_worker = worker
+        self._set_rendering(True)
+        operation = "Exporting full-resolution PNG" if export_path else "Generating style preview"
+        self.statusBar().showMessage(f"{operation}…")
+        thread.start()
+
+    def _set_rendering(self, active: bool) -> None:
+        """Prevent conflicting changes and show indeterminate progress."""
+        self.open_button.setEnabled(not active)
+        self.setup_box.setEnabled(not active)
+        self.style_box.setEnabled(not active)
+        self.save_button.setEnabled(not active and self.source_image is not None)
+        self.progress.setVisible(active)
+
+    def _preview_finished(self, result: object) -> None:
+        if not isinstance(result, Image.Image):
+            self._render_failed("The preview renderer returned an invalid image")
+            return
+        self.output_image = result
+        self.output_view.set_image(result)
+        self.statusBar().showMessage(
+            f"Generated {self._current_style().display_name} preview at "
+            f"{result.width} × {result.height}"
+        )
+
+    def _export_finished(self, filename: str, width: int, height: int) -> None:
+        self.statusBar().showMessage(
+            f"Saved {Path(filename).name} at {width} × {height}"
+        )
+
+    def _render_failed(self, message: str) -> None:
+        QMessageBox.critical(self, "Rendering failed", message)
+        self.statusBar().showMessage("Rendering failed")
+
+    def _render_cleanup(self) -> None:
+        self._render_thread = None
+        self._render_worker = None
+        self._set_rendering(False)
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """Keep the window alive until its current worker safely finishes."""
+        if self._render_thread is not None:
+            QMessageBox.information(
+                self,
+                "Rendering in progress",
+                "Please wait for the current render or export to finish before closing ReCraft.",
+            )
+            event.ignore()
+            return
+        super().closeEvent(event)

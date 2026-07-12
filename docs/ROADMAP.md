@@ -9,9 +9,10 @@ and Fragment.
 
 ## Phase 0.2
 
-Project files, undo and redo, batch processing, asynchronous rendering, and
-better performance. Initial image-preparation parameter controls moved into and
-completed in Phase 0.1.
+Project files, undo and redo, batch processing, and better performance.
+Asynchronous style preview and full-resolution export rendering moved into and
+completed in Phase 0.1. Initial image-preparation parameter controls were also
+moved into and completed in Phase 0.1.
 
 ## Phase 0.3
 

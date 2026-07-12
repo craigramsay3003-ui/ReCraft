@@ -31,6 +31,16 @@ Export separately prepares the original source and runs the style at configured
 full resolution. A preview is never enlarged for export. Output dimensions are
 limited to 8,000 pixels per side as a memory-safety guard.
 
+## Background rendering
+
+`RenderWorker` receives an isolated snapshot of the source image, preparation
+settings, selected style, and parameters. It performs style preview rendering
+or full-resolution preparation, style processing, and PNG writing on a
+`QThread`. The main window remains responsive, presents indeterminate progress,
+and temporarily locks conflicting controls until the job finishes. Results and
+useful error messages return through Qt signals; processing algorithms remain
+independent of Qt.
+
 ## Style plugin system
 
 `ArtStyle` defines the contract: identifier, display name, description, parameters, validation, and processing. `StyleRegistry` stores unique styles and supplies them to clients.

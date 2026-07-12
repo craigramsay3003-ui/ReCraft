@@ -175,3 +175,52 @@ Manual checks after launch:
 3. Zoom with the wheel, drag to pan, rotate, flip, and reset.
 4. Set an output size such as 1200 x 800 and generate each style preview.
 5. Save a PNG and confirm its dimensions match the configured output size.
+
+
+BACKGROUND RENDERING CHANGELOG — 12 JULY 2026
+
+Resolved the known issue where large style previews and full-resolution exports
+could freeze the application window.
+
+Changes:
+
+- Added src/recraft/ui/render_worker.py.
+- Style preview processing now runs on a background QThread.
+- Full-resolution preparation, style processing, and PNG writing now run on a
+  background QThread.
+- Each worker receives a snapshot of the original source, transformation state,
+  selected style, and style parameters, preventing partial UI changes from
+  affecting an in-progress render.
+- Added an indeterminate progress indicator and useful status messages.
+- Open, preparation, style, generate, and save controls are temporarily locked
+  while a render runs, preventing conflicting jobs or settings changes.
+- Worker errors are returned to the interface and shown to the user rather than
+  being silently discarded.
+- Closing the application is safely deferred while a background job is active,
+  preventing a running render thread from being destroyed.
+- Added tests/test_render_worker.py for preview results and full-resolution PNG
+  writing.
+- Updated README.md, docs/ARCHITECTURE.md, and docs/ROADMAP.md.
+
+Updated limitation:
+
+- ReCraft currently runs one render job at a time and does not yet provide a
+  cancel button or percentage-based progress. The interface remains responsive
+  and shows indeterminate progress while work completes.
+
+Local verification steps after pulling this change:
+
+  git pull origin main
+  .venv\Scripts\activate
+  python -m pip install -e ".[dev]"
+  pytest
+  python -m recraft
+
+Manual responsiveness check:
+
+1. Open a photograph and configure a large output such as 4000 x 4000.
+2. Generate a Fragment preview and confirm the progress indicator appears.
+3. Move or resize the application window while rendering; it should remain
+   responsive.
+4. Save the full-resolution PNG and confirm the interface remains responsive,
+   controls unlock afterward, and the file has the configured dimensions.

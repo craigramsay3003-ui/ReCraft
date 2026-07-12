@@ -14,6 +14,7 @@ ReCraft is an early experimental desktop prototype for interpreting images as pr
 - Non-destructively crop, pan, zoom, rotate, and flip before applying a style.
 - Original, 1:1, 4:5, 2:3, 3:2, and 16:9 output framing with Fit or Fill.
 - Independent preview and full-resolution export rendering.
+- Background style rendering and PNG writing keep the interface responsive.
 - Contour, Halftone, and Fragment procedural styles.
 - Style-specific controls generated from reusable style metadata.
 - PNG export and a processing API independent of the interface.
