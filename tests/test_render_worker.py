@@ -6,6 +6,7 @@ from PIL import Image
 from recraft.core.image_transform import ImageTransformSettings
 from recraft.styles.base import ArtStyle, ParameterValue
 from recraft.ui.render_worker import RenderWorker
+from recraft.engine.analysis_result import ImageAnalysis
 
 
 class CopyStyle(ArtStyle):
@@ -16,10 +17,10 @@ class CopyStyle(ArtStyle):
 
     def process(
         self,
-        image: Image.Image,
+        analysis: ImageAnalysis,
         parameters: Mapping[str, ParameterValue] | None = None,
     ) -> Image.Image:
-        return image.copy()
+        return analysis.image.copy()
 
 
 def test_preview_worker_reports_rendered_image() -> None:

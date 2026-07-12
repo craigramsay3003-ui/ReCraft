@@ -5,7 +5,9 @@
 Completed: image loading, non-destructive preparation, fixed crop viewport,
 pan, zoom, rotation, flips, aspect-ratio presets, Fit/Fill, independent preview
 and export resolution, modular styles, preview, PNG export, Contour, Halftone,
-and Fragment.
+and Fragment. Also completed: the Phase 1 ReCraft Engine foundation, reusable
+Image DNA maps, weighted importance, user-mask extension points, importance-aware
+versions of all three styles, and developer analysis views.
 
 ## Phase 0.2
 

@@ -224,3 +224,99 @@ Manual responsiveness check:
    responsive.
 4. Save the full-resolution PNG and confirm the interface remains responsive,
    controls unlock afterward, and the file has the configured dimensions.
+
+
+RECRAFT ENGINE / IMAGE DNA CHANGELOG — 12 JULY 2026
+
+Milestone: ReCraft now interprets a prepared image before procedural art runs.
+The shared processing order is:
+
+  imported image -> preparation -> ImageAnalysis -> style -> preview/export
+
+Added package: src/recraft/engine
+
+- analysis.py: orchestrates one analysis pass and bounds analysis maps to 1,200
+  pixels on their longest side for predictable memory use.
+- analysis_result.py: typed ImageAnalysis/Image DNA result, debug rendering,
+  map resizing, and future user-mask attachment.
+- edges.py: edges, gradient magnitude, local contrast, and texture.
+- colour.py: deterministic k-means colour clusters.
+- segmentation.py: spectral saliency, centre weighting, and general-purpose
+  subject/background masks.
+- faces.py: capability-based face detection and landmark extension points.
+- importance.py: weighted automatic importance plus importance/additive/
+  subtractive user-mask composition.
+
+Reusable ImageAnalysis data now includes:
+
+- greyscale and contrast-enhanced greyscale
+- edge map and gradient magnitude
+- colour cluster labels and centres
+- texture and saliency maps
+- face rectangles, soft face mask, and optional landmark collections
+- subject and background masks
+- image-centre weighting and local contrast
+- automatic and combined editable importance maps
+
+Importance combines edge/gradient strength, saliency, face confidence, local
+contrast, object-boundary evidence, subject evidence, and centre distance. Its
+float values are normalized to 0..1.
+
+Style refactoring:
+
+- ArtStyle.process now receives ImageAnalysis, not a raw Pillow image.
+- Fragment uses importance-weighted feature/random points plus a regular base
+  grid, limiting giant stretched polygons and adding detail to important areas.
+- Contour smooths brightness before extracting bands, rejects tiny loops, and
+  reinforces important edges.
+- Halftone uses local brightness normalization and adaptive dot spacing/sizing;
+  a minimum importance-aware dot prevents bright subjects from disappearing.
+- Preview and export each analyse their prepared canvas once, then reuse that
+  result within the selected style.
+
+Developer UI:
+
+- Added Artwork, Edge Map, Importance Map, Face Mask, Background Mask, Saliency,
+  Colour Clusters, Texture, and Subject Mask preview options.
+- Developer maps run in the existing responsive background worker.
+- PNG export always produces selected artwork, never a developer map.
+
+Tests:
+
+- Added tests/test_engine.py.
+- Updated style, prepared-pipeline, and worker tests for ImageAnalysis.
+- 47 tests passed locally on Python 3.14.6.
+- Tests cover every map, normalized ranges, independent source ownership,
+  editable masks, all debug views, bounded large-image analysis, every style,
+  preparation, background rendering, and full-resolution export.
+
+Known limitations:
+
+- OpenCV builds differ. Face detection runs when CascadeClassifier and its Haar
+  data are available; otherwise Face Mask is safely zero and all general image
+  cues continue to operate. The user's Python 3.14/OpenCV 5 wheel currently
+  lacks that classic detector API.
+- Face landmark estimation is represented in ImageAnalysis but requires a
+  compatible external model that is not bundled; landmark collections are
+  currently empty.
+- Subject/background segmentation is a general saliency-based first version,
+  not a semantic neural-network object detector.
+- User importance/additive/subtractive masks are supported by the engine model,
+  but painting tools are intentionally not built yet.
+
+Exact local update and verification:
+
+  git pull origin main
+  .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+  .\.venv\Scripts\python.exe -m pytest
+  .\.venv\Scripts\python.exe -m recraft
+
+Manual Engine checks:
+
+1. Open photographs containing different subjects: a person, animal, vehicle,
+   building, landscape, and product.
+2. Generate each developer map and confirm it responds to image structure.
+3. Compare Fragment, Contour, and Halftone with the same prepared composition.
+4. Confirm important edges/subjects retain more local detail.
+5. Export a PNG and verify it contains artwork at configured dimensions rather
+   than the selected developer map.

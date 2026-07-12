@@ -6,6 +6,8 @@ from PIL import Image
 
 from recraft.core.image_transform import ImageTransformSettings, prepare_image
 from recraft.styles.base import ArtStyle, ParameterValue
+from recraft.engine import analyse_image
+from recraft.engine.analysis_result import ImageAnalysis
 
 
 def preview_size(settings: ImageTransformSettings, maximum: int = 800) -> tuple[int, int]:
@@ -30,7 +32,8 @@ def render_style_preview(
     maximum: int = 800,
 ) -> Image.Image:
     """Prepare at preview resolution and pass that canvas to a style."""
-    return style.process(render_prepared_preview(source, settings, maximum), parameters)
+    analysis = analyse_image(render_prepared_preview(source, settings, maximum))
+    return style.process(analysis, parameters)
 
 
 def render_style_export(
@@ -41,4 +44,12 @@ def render_style_export(
 ) -> Image.Image:
     """Prepare and process directly at configured full export resolution."""
     prepared = prepare_image(source, settings)
-    return style.process(prepared, parameters)
+    analysis = analyse_image(prepared)
+    return style.process(analysis, parameters)
+
+
+def analyse_prepared_preview(
+    source: Image.Image, settings: ImageTransformSettings, maximum: int = 800
+) -> ImageAnalysis:
+    """Prepare and analyse one interactive working canvas."""
+    return analyse_image(render_prepared_preview(source, settings, maximum))

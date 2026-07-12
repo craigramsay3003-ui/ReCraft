@@ -47,6 +47,41 @@ independent of Qt.
 
 To add a style, create a module in `recraft.styles`, subclass `ArtStyle`, define its parameter metadata and processor, and add an instance to `create_default_registry`. The UI will discover it automatically.
 
+## ReCraft Engine and Image DNA
+
+`recraft.engine` is the interpretation layer between image preparation and
+procedural artwork:
+
+`prepared canvas → analyse_image → ImageAnalysis → selected style`
+
+The engine computes greyscale, CLAHE-enhanced greyscale, edges, gradient
+magnitude, local contrast, k-means colour clusters, local texture, spectral
+saliency, optional face signals, generic subject/background segmentation, and
+elliptical centre weighting. `importance.py` combines gradient, saliency, face
+confidence, local contrast, boundaries, subject evidence, and centre distance
+into a normalized 0..1 preservation priority.
+
+The result is computed once for a render and the same `ImageAnalysis` instance
+is supplied to its style. Analysis maps are capped at 1,200 pixels on their
+longest side to avoid multi-gigabyte allocations on large exports. The full
+prepared RGB image remains available, and styles resize only required maps.
+
+`ImageAnalysis.with_user_masks` already supports an absolute importance mask
+plus additive and subtractive brush layers. These arrays are validated and
+combined non-destructively; UI painting tools are intentionally deferred.
+
+Face detection is capability-based because OpenCV distributions differ. A
+supported Haar detector adds a soft face-confidence map. Otherwise the map is
+zero and the general saliency, boundary, subject, contrast, and centre signals
+continue normally. Landmark collections are available in the contract for a
+future model but are empty when no compatible estimator is installed.
+
+Current styles use the shared analysis differently: Fragment distributes points
+by importance and constrains triangle size with a base grid; Contour smooths
+brightness bands, removes tiny loops, and reinforces important edges; Halftone
+uses local normalization and adaptive dot spacing/sizing. The developer dropdown
+renders reusable maps without changing PNG export behavior.
+
 ## Future exporters and mesh generation
 
 Exporters should consume processing results without depending on the UI. Vector exporters can initially consume style-specific paths, while a later geometry layer can translate depth maps or procedural primitives into validated meshes. Keeping these layers separate prevents manufacturing concerns from complicating image interpretation.

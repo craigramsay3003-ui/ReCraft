@@ -86,9 +86,14 @@ class MainWindow(QMainWindow):
         self.style_combo = QComboBox()
         for style in self.registry: self.style_combo.addItem(style.display_name, style.identifier)
         self.style_combo.currentIndexChanged.connect(self._rebuild_parameters)
+        self.debug_combo = QComboBox()
+        self.debug_combo.addItem("Artwork", None)
+        for name in ("Edge Map", "Importance Map", "Face Mask", "Background Mask", "Saliency", "Colour Clusters", "Texture", "Subject Mask"):
+            self.debug_combo.addItem(name, name)
+        self.debug_combo.setToolTip("Developer view of reusable ReCraft Engine analysis maps")
         self.description = QLabel(); self.parameter_container = QWidget(); self.parameter_form = QFormLayout(self.parameter_container)
         self.generate_button = QPushButton("Generate Preview"); self.generate_button.clicked.connect(self._generate)
-        style_layout.addWidget(QLabel("Style")); style_layout.addWidget(self.style_combo); style_layout.addWidget(self.description, 1); style_layout.addWidget(self.parameter_container); style_layout.addWidget(self.generate_button)
+        style_layout.addWidget(QLabel("Style")); style_layout.addWidget(self.style_combo); style_layout.addWidget(self.description, 1); style_layout.addWidget(self.parameter_container); style_layout.addWidget(QLabel("Developer view")); style_layout.addWidget(self.debug_combo); style_layout.addWidget(self.generate_button)
         root.addWidget(self.style_box)
 
         panels = QHBoxLayout()
@@ -211,7 +216,12 @@ class MainWindow(QMainWindow):
 
         thread = QThread(self)
         worker = RenderWorker(
-            self.source_image, settings, style, parameters, export_path
+            self.source_image,
+            settings,
+            style,
+            parameters,
+            export_path,
+            None if export_path else self.debug_combo.currentData(),
         )
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
@@ -225,7 +235,7 @@ class MainWindow(QMainWindow):
         self._render_thread = thread
         self._render_worker = worker
         self._set_rendering(True)
-        operation = "Exporting full-resolution PNG" if export_path else "Generating style preview"
+        operation = "Exporting full-resolution PNG" if export_path else "Generating Engine preview"
         self.statusBar().showMessage(f"{operation}…")
         thread.start()
 
@@ -243,8 +253,9 @@ class MainWindow(QMainWindow):
             return
         self.output_image = result
         self.output_view.set_image(result)
+        label = self.debug_combo.currentText() if self.debug_combo.currentData() else self._current_style().display_name
         self.statusBar().showMessage(
-            f"Generated {self._current_style().display_name} preview at "
+            f"Generated {label} preview at "
             f"{result.width} × {result.height}"
         )
 

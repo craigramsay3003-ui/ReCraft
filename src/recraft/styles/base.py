@@ -6,6 +6,8 @@ from typing import Mapping
 
 from PIL import Image
 
+from recraft.engine.analysis_result import ImageAnalysis
+
 ParameterValue = int | float
 
 
@@ -56,6 +58,6 @@ class ArtStyle(ABC):
 
     @abstractmethod
     def process(
-        self, image: Image.Image, parameters: Mapping[str, ParameterValue] | None = None
+        self, analysis: ImageAnalysis, parameters: Mapping[str, ParameterValue] | None = None
     ) -> Image.Image:
-        """Return a procedural interpretation of *image*."""
+        """Return a procedural interpretation of shared image analysis."""

@@ -7,7 +7,7 @@ from PIL import Image
 from PySide6.QtCore import QObject, Signal, Slot
 
 from recraft.core.image_transform import ImageTransformSettings
-from recraft.core.prepared_image import render_style_export, render_style_preview
+from recraft.core.prepared_image import analyse_prepared_preview, render_style_export, render_style_preview
 from recraft.styles.base import ArtStyle, ParameterValue
 
 
@@ -26,6 +26,7 @@ class RenderWorker(QObject):
         style: ArtStyle,
         parameters: Mapping[str, ParameterValue],
         export_path: str | None = None,
+        debug_view: str | None = None,
     ) -> None:
         super().__init__()
         self._source = source.copy()
@@ -33,15 +34,20 @@ class RenderWorker(QObject):
         self._style = style
         self._parameters = dict(parameters)
         self._export_path = export_path
+        self._debug_view = debug_view
 
     @Slot()
     def run(self) -> None:
         """Execute the configured job and always report completion."""
         try:
             if self._export_path is None:
-                result = render_style_preview(
-                    self._source, self._settings, self._style, self._parameters
-                )
+                if self._debug_view:
+                    analysis = analyse_prepared_preview(self._source, self._settings)
+                    result = analysis.debug_image(self._debug_view)
+                else:
+                    result = render_style_preview(
+                        self._source, self._settings, self._style, self._parameters
+                    )
                 self.preview_ready.emit(result)
             else:
                 result = render_style_export(

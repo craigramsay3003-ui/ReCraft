@@ -8,6 +8,26 @@ ReCraft transforms ordinary images into mathematically generated artwork that wo
 
 ReCraft is an early experimental desktop prototype for interpreting images as procedural artwork. It is more than a collection of filters: each style rebuilds source structure using a different mathematical visual language.
 
+## ReCraft Engine
+
+Before any style runs, the ReCraft Engine interprets the prepared image as
+reusable "Image DNA". It extracts greyscale and contrast-enhanced images,
+edges, gradients, colour clusters, texture, saliency, optional faces and
+landmarks, generic subject/background masks, and centre weighting. These cues
+produce a floating-point importance map where 0 permits aggressive
+simplification and 1 requests maximum preservation.
+
+Contour, Halftone, and Fragment all consume the same `ImageAnalysis` contract;
+they no longer independently analyse raw pixels. The architecture also accepts
+future importance, additive-brush, and subtractive-brush masks without
+implementing painting tools yet.
+
+Analysis maps are bounded to 1,200 pixels on their longest side for predictable
+memory use. Styles resample only the maps they need onto the full export canvas.
+Face detection is used when the installed OpenCV build exposes a compatible
+detector. Landmark output is represented but remains empty without an installed
+landmark model. No portrait assumption is used for subject detection.
+
 ## Current prototype features
 
 - Load common image formats and compare the original with a generated preview.
@@ -15,6 +35,8 @@ ReCraft is an early experimental desktop prototype for interpreting images as pr
 - Original, 1:1, 4:5, 2:3, 3:2, and 16:9 output framing with Fit or Fill.
 - Independent preview and full-resolution export rendering.
 - Background style rendering and PNG writing keep the interface responsive.
+- A developer view can preview edges, importance, face/background/subject masks,
+  saliency, colour clusters, and texture.
 - Contour, Halftone, and Fragment procedural styles.
 - Style-specific controls generated from reusable style metadata.
 - PNG export and a processing API independent of the interface.

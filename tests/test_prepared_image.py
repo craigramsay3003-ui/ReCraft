@@ -5,6 +5,7 @@ from PIL import Image
 from recraft.core.image_transform import ImageTransformSettings
 from recraft.core.prepared_image import render_style_export, render_style_preview
 from recraft.styles.base import ArtStyle, ParameterValue
+from recraft.engine.analysis_result import ImageAnalysis
 
 
 class RecordingStyle(ArtStyle):
@@ -20,11 +21,11 @@ class RecordingStyle(ArtStyle):
 
     def process(
         self,
-        image: Image.Image,
+        analysis: ImageAnalysis,
         parameters: Mapping[str, ParameterValue] | None = None,
     ) -> Image.Image:
-        self.received_sizes.append(image.size)
-        return image.copy()
+        self.received_sizes.append(analysis.image.size)
+        return analysis.image.copy()
 
 
 def test_style_processing_receives_prepared_image() -> None:

@@ -3,6 +3,7 @@ import pytest
 from PIL import Image
 
 from recraft.core.style_registry import create_default_registry
+from recraft.engine import analyse_image
 
 
 @pytest.fixture
@@ -14,7 +15,7 @@ def sample_image() -> Image.Image:
 
 @pytest.mark.parametrize("style", list(create_default_registry()), ids=lambda style: style.identifier)
 def test_every_style_produces_valid_image(style, sample_image: Image.Image) -> None:
-    result = style.process(sample_image)
+    result = style.process(analyse_image(sample_image))
     assert result.size == sample_image.size
     assert result.mode == "RGB"
 
