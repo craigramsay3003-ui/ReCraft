@@ -465,3 +465,22 @@ pushed with upstream tracking. Do not merge without explicit instruction.
 - Added Contour Height diagnostics and synthetic orientation/material tests.
 
 See docs/CONTOUR_WORKFLOW.md for the staged workflow and calculations.
+
+Final feature-branch validation:
+
+- 74 automated tests passed on Python 3.14.6.
+- Source compilation and off-screen guided navigation passed.
+- Actual Qt background workers generated Contour paths, reused cached paths for
+  relief-only work, built a watertight mesh, and rendered the material preview.
+- Synthetic asymmetric STL remained left/right correct and watertight.
+- Synthetic coloured 3MF contained Base and Contour Relief assignments and
+  retained the same orientation. Structure was validated programmatically; it
+  was not opened in Bambu Studio to avoid disrupting existing user projects.
+- Full release build passed and overwrote local ignored development artifacts:
+  dist/ReCraft/ReCraft.exe (10,671,860 bytes) and dist/ReCraft-Setup.exe
+  (95,300,225 bytes).
+- The exact dist executable was launched and visually walked through Stages
+  1–5. The persistent canvas, Back/Next navigation, separate diagnostics,
+  variable-relief controls, material swatches, STL warning, and 3MF control were
+  present. The application was then closed normally.
+- Stable local main and origin/main both remained at 4a479ff.
