@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QGridLayout,
     QGroupBox, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton,
     QProgressBar, QSpinBox, QStackedWidget, QVBoxLayout, QWidget, QColorDialog,
+    QSplitter, QScrollArea, QTabWidget, QPlainTextEdit,
 )
 
 from recraft.core.image_loader import ImageLoadError, load_image
@@ -30,6 +31,13 @@ from recraft.engine.colour_selection import select_similar_colour
 from recraft.engine.region_selection import select_connected_region
 from recraft.exporters.contour_mesh import ContourMeshSettings, ReliefColours, render_relief_preview
 from recraft.core.contour_workflow import ContourStage, ContourWorkflowState
+from recraft.core.contour_presets import ContourPresetName, PRESETS, PresetState
+from recraft.core.preview_settings import PreviewQuality, PreviewSettings
+from recraft.core.print_profiles import PROFILES, PrintProfileName, validate_printability
+from recraft.engine.focus_features import FocusAction, interpret_focus_description, suggest_focus_features
+from recraft.ui.mesh_view import MeshView
+from recraft.ui.collapsible import CollapsibleSection
+from recraft.styles.contour_geometry import contour_height_image
 
 
 class MainWindow(QMainWindow):
@@ -52,6 +60,10 @@ class MainWindow(QMainWindow):
         self.workflow_state = ContourWorkflowState()
         self.cached_contour_result = None
         self.cached_mesh_result = None
+        self.preset_state = PresetState()
+        self.focus_features = []
+        self.current_analysis = None
+        self.print_profile = PROFILES[PrintProfileName.BAMBU_H2C]
         self.setWindowTitle("ReCraft — Create the impossible.")
         self.resize(1250, 800)
         self._build_ui()
@@ -156,12 +168,21 @@ class MainWindow(QMainWindow):
         self.uniform_height.toggled.connect(self._relief_changed); self.orientation_marker.toggled.connect(self._relief_changed)
 
         self.preview_page = QWidget(); preview_root = QVBoxLayout(self.preview_page); panels = QHBoxLayout()
-        left = QVBoxLayout(); self.prepared_label = QLabel("Prepared image — wheel to zoom, drag to pan"); left.addWidget(self.prepared_label); self.prepared_view = ImageView("Open an image to begin", interactive=True); left.addWidget(self.prepared_view)
+        left = QVBoxLayout(); source_bar = QHBoxLayout(); self.prepared_label = QLabel("Source and analysis — wheel to zoom, drag to pan"); source_bar.addWidget(self.prepared_label)
+        self.source_view_mode = QComboBox(); self.source_view_mode.addItems(("Prepared image", "Suggested focus features", "Importance overlay", "Background suppression", "Relief-height map")); self.source_view_mode.currentIndexChanged.connect(self._refresh_source_mode); source_bar.addWidget(self.source_view_mode)
+        left.addLayout(source_bar); self.prepared_view = ImageView("Open an image to begin", interactive=True); self.prepared_view.enable_view_navigation(True); left.addWidget(self.prepared_view)
         self.prepared_view.zoom_requested.connect(self._gesture_zoom); self.prepared_view.pan_requested.connect(self._gesture_pan)
         self.prepared_view.image_painted.connect(self._paint_importance); self.prepared_view.image_clicked.connect(self._selection_clicked)
-        right = QVBoxLayout(); right.addWidget(QLabel("Transformed preview")); self.output_view = ImageView("Generate a style preview"); right.addWidget(self.output_view)
-        self.relief_view = ImageView("Build a relief preview")
-        relief = QVBoxLayout(); relief.addWidget(QLabel("3D relief material preview")); relief.addWidget(self.relief_view)
+        right = QVBoxLayout(); contour_bar = QHBoxLayout(); contour_bar.addWidget(QLabel("2D Contour")); contour_bar.addStretch(); self.contour_fit = QPushButton("Fit"); self.contour_fit.clicked.connect(lambda: self.output_view.fit_to_view()); contour_bar.addWidget(self.contour_fit); right.addLayout(contour_bar); self.output_view = ImageView("Generate a style preview", interactive=True); self.output_view.enable_view_navigation(True); right.addWidget(self.output_view)
+        self.mesh_view = MeshView()
+        relief = QVBoxLayout(); mesh_toolbar = QHBoxLayout(); mesh_toolbar.addWidget(QLabel("Actual 3D relief"))
+        for view_name in ("Perspective", "Front", "Back", "Left", "Right", "Top"):
+            button = QPushButton(view_name); button.clicked.connect(lambda checked=False, name=view_name: self.mesh_view.set_standard_view(name)); mesh_toolbar.addWidget(button)
+        reset_camera = QPushButton("Reset"); reset_camera.clicked.connect(self.mesh_view.reset_camera); mesh_toolbar.addWidget(reset_camera)
+        fit_camera = QPushButton("Fit"); fit_camera.clicked.connect(self.mesh_view.fit_mesh); mesh_toolbar.addWidget(fit_camera)
+        self.projection_combo = QComboBox(); self.projection_combo.addItems(("perspective", "orthographic")); self.projection_combo.currentTextChanged.connect(self.mesh_view.set_projection); mesh_toolbar.addWidget(self.projection_combo)
+        self.wireframe_check = QCheckBox("Edges"); self.wireframe_check.toggled.connect(lambda checked: (setattr(self.mesh_view, "wireframe", checked), self.mesh_view.update())); mesh_toolbar.addWidget(self.wireframe_check)
+        relief.addLayout(mesh_toolbar); relief.addWidget(self.mesh_view)
         panels.addLayout(right); panels.addLayout(relief); preview_root.addLayout(panels, 1)
         material_row = QHBoxLayout(); self.base_colour_button = QPushButton(); self.contour_colour_button = QPushButton(); self.reset_colours_button = QPushButton("Reset colours")
         self.base_colour_button.clicked.connect(lambda: self._choose_colour("base")); self.contour_colour_button.clicked.connect(lambda: self._choose_colour("contour")); self.reset_colours_button.clicked.connect(self._reset_colours)
@@ -173,15 +194,38 @@ class MainWindow(QMainWindow):
         material_row.addWidget(self.build_relief_button); material_row.addWidget(self.save_button); material_row.addWidget(self.stl_button); material_row.addWidget(self.threemf_button); preview_root.addLayout(material_row)
         self.stl_note = QLabel("STL stores geometry only and does not contain Base or Contour colours. Use 3MF for colour/material assignments."); self.stl_note.setWordWrap(True); preview_root.addWidget(self.stl_note)
 
-        self.workflow_stack = QStackedWidget()
-        self.workflow_stack.addWidget(self.setup_box); self.workflow_stack.addWidget(self.importance_box); self.workflow_stack.addWidget(self.style_box); self.workflow_stack.addWidget(self.mesh_box); self.workflow_stack.addWidget(self.preview_page)
-        workspace = QHBoxLayout(); workspace.addWidget(self.workflow_stack, 2)
-        persistent_preview = QWidget(); persistent_layout = QVBoxLayout(persistent_preview); persistent_layout.addWidget(self.prepared_label); persistent_layout.addWidget(self.prepared_view, 1)
-        workspace.addWidget(persistent_preview, 1); root.addLayout(workspace, 1)
-        navigation = QHBoxLayout(); self.stage_label = QLabel(); self.back_button = QPushButton("Back"); self.next_button = QPushButton("Next")
-        self.back_button.clicked.connect(self._previous_stage); self.next_button.clicked.connect(self._next_stage)
-        navigation.addWidget(self.stage_label); navigation.addStretch(); navigation.addWidget(self.back_button); navigation.addWidget(self.next_button); root.addLayout(navigation)
-        self._sync_workflow_stage(); self._update_colour_buttons()
+        self.preset_combo = QComboBox()
+        for preset_name in ContourPresetName: self.preset_combo.addItem(preset_name.value, preset_name)
+        self.preset_combo.setCurrentIndex(self.preset_combo.findData(ContourPresetName.STANDARD)); self.preset_combo.currentIndexChanged.connect(self._preset_changed)
+        self.preset_description = QLabel(PRESETS[ContourPresetName.STANDARD].description); self.preset_description.setWordWrap(True)
+        self.preset_modified = QLabel("Standard defaults")
+        reset_preset = QPushButton("Reset to preset"); reset_preset.clicked.connect(self._reset_to_preset)
+        preset_panel = QWidget(); preset_layout = QFormLayout(preset_panel); preset_layout.addRow("Creative preset", self.preset_combo); preset_layout.addRow(self.preset_description); preset_layout.addRow(self.preset_modified, reset_preset)
+
+        self.analysis_summary = QLabel("Open an image to see editable analysis suggestions."); self.analysis_summary.setWordWrap(True)
+        self.focus_cards = QWidget(); self.focus_cards_layout = QVBoxLayout(self.focus_cards); self.focus_cards_layout.setContentsMargins(0, 0, 0, 0)
+        self.focus_description = QPlainTextEdit(); self.focus_description.setMaximumHeight(62); self.focus_description.setPlaceholderText("Example: focus on faces and silhouettes; simplify the background")
+        apply_focus = QPushButton("Apply description"); apply_focus.clicked.connect(self._apply_focus_description)
+        reset_focus = QPushButton("Reset suggestions"); reset_focus.clicked.connect(self._reset_focus_suggestions)
+        focus_panel = QWidget(); focus_layout = QVBoxLayout(focus_panel); focus_layout.addWidget(self.analysis_summary); focus_layout.addWidget(self.focus_cards); focus_layout.addWidget(self.focus_description); focus_buttons = QHBoxLayout(); focus_buttons.addWidget(apply_focus); focus_buttons.addWidget(reset_focus); focus_layout.addLayout(focus_buttons); focus_layout.addWidget(self.importance_box)
+
+        self.profile_combo = QComboBox()
+        for profile_name in PrintProfileName: self.profile_combo.addItem(profile_name.value, profile_name)
+        self.profile_combo.currentIndexChanged.connect(self._profile_changed)
+        self.nozzle_spin = QDoubleSpinBox(); self.nozzle_spin.setRange(.2, 1.2); self.nozzle_spin.setValue(.4); self.nozzle_spin.setSuffix(" mm"); self.nozzle_spin.valueChanged.connect(self._print_settings_changed)
+        self.layer_spin = QDoubleSpinBox(); self.layer_spin.setRange(.05, .6); self.layer_spin.setValue(.2); self.layer_spin.setSuffix(" mm"); self.layer_spin.valueChanged.connect(self._print_settings_changed)
+        self.preview_quality = QComboBox(); self.preview_quality.addItems([quality.value for quality in PreviewQuality]); self.preview_quality.setCurrentText(PreviewQuality.BALANCED.value)
+        print_panel = QWidget(); print_layout = QFormLayout(print_panel); print_layout.addRow("Printer profile", self.profile_combo); print_layout.addRow("Nozzle", self.nozzle_spin); print_layout.addRow("Layer height", self.layer_spin); print_layout.addRow("Preview quality", self.preview_quality)
+        self.print_warnings = QLabel("Printability checks appear after the mesh is built."); self.print_warnings.setWordWrap(True); print_layout.addRow(self.print_warnings)
+
+        controls_content = QWidget(); controls_layout = QVBoxLayout(controls_content); controls_layout.setContentsMargins(4, 4, 4, 4)
+        for section_title, section_widget, expanded in (("Creative style", preset_panel, True), ("Image interpretation & focus", focus_panel, True), ("Image preparation", self.setup_box, False), ("Contour controls", self.style_box, True), ("Relief and print setup", self.mesh_box, False), ("Printer profile", print_panel, True)):
+            controls_layout.addWidget(CollapsibleSection(section_title, section_widget, expanded=expanded))
+        controls_layout.addStretch()
+        controls_scroll = QScrollArea(); controls_scroll.setWidgetResizable(True); controls_scroll.setWidget(controls_content); controls_scroll.setMinimumWidth(370)
+        workspace = QSplitter(Qt.Orientation.Horizontal); workspace.addWidget(self.preview_page); workspace.addWidget(controls_scroll); workspace.setSizes([880, 370]); workspace.setStretchFactor(0, 1); root.addWidget(workspace, 1)
+        collapse_controls = QPushButton("Collapse controls"); collapse_controls.setCheckable(True); collapse_controls.toggled.connect(lambda collapsed: controls_scroll.setVisible(not collapsed)); heading.insertWidget(heading.count() - 1, collapse_controls)
+        self._update_colour_buttons()
         self.progress = QProgressBar(); self.progress.setRange(0, 0); self.progress.setMaximumWidth(180); self.progress.hide()
         self.statusBar().addPermanentWidget(self.progress)
         self.setCentralWidget(central); self.statusBar().showMessage("Ready — open an image to begin")
@@ -229,6 +273,7 @@ class MainWindow(QMainWindow):
             self.transform_settings = self.transform_settings.reset(self.source_image.size)
             self._sync_setup_controls(); self._refresh_prepared(); self._invalidate_output()
             self.statusBar().showMessage(f"Loaded {Path(filename).name} at {self.source_image.width} × {self.source_image.height}")
+            self._generate()
         except ImageLoadError as exc: QMessageBox.critical(self, "Could not open image", str(exc))
 
     def _setup_changed(self) -> None:
@@ -333,6 +378,7 @@ class MainWindow(QMainWindow):
         thread.started.connect(worker.run)
         worker.preview_ready.connect(self._preview_finished)
         worker.geometry_ready.connect(self._contour_geometry_ready)
+        worker.analysis_ready.connect(self._analysis_finished)
         worker.export_ready.connect(self._export_finished)
         worker.failed.connect(self._render_failed)
         worker.finished.connect(thread.quit)
@@ -463,6 +509,9 @@ class MainWindow(QMainWindow):
             minimum_feature_width=self.minimum_feature.value(), relief_strength=self.relief_strength.value(),
             height_smoothing=self.height_smoothing.value(), background_relief_reduction=self.background_relief.value(),
             uniform_height=self.uniform_height.isChecked(), orientation_marker=self.orientation_marker.isChecked(),
+            minimum_ridge_width=self.minimum_feature.value(), maximum_ridge_width=max(self.minimum_feature.value(), self.ridge_width.value() * 1.8),
+            width_variation_strength=float(self.parameter_widgets.get("width_variation").value()) if "width_variation" in self.parameter_widgets else .5,
+            uniform_width=bool(self.parameter_widgets.get("uniform_width").value()) if "uniform_width" in self.parameter_widgets else False,
         ).validated()
 
     def _build_relief_preview(self) -> None:
@@ -480,12 +529,15 @@ class MainWindow(QMainWindow):
         if self.source_image is None or self._render_thread is not None: return
         try: settings = self._mesh_settings()
         except ValueError as exc: QMessageBox.warning(self, "Invalid relief settings", str(exc)); return
+        if export_format == "preview":
+            quality = PreviewSettings(PreviewQuality(self.preview_quality.currentText()))
+            settings = replace(settings, resolution=max(40, round(settings.resolution * quality.mesh_resolution_scale)))
         thread = QThread(self); worker = MeshWorker(
             self.source_image, self._settings_from_controls(), copy.deepcopy(self.user_importance), self._style_parameters(),
             settings, path, self.workflow_state.colours, export_format, self.cached_contour_result,
         )
         worker.moveToThread(thread); thread.started.connect(worker.run); worker.exported.connect(self._mesh_exported)
-        worker.preview_ready.connect(self.relief_view.set_image); worker.geometry_ready.connect(self._contour_geometry_ready); worker.mesh_ready.connect(self._mesh_geometry_ready)
+        worker.geometry_ready.connect(self._contour_geometry_ready); worker.mesh_ready.connect(self._mesh_geometry_ready)
         worker.failed.connect(self._render_failed); worker.finished.connect(thread.quit); worker.finished.connect(worker.deleteLater); thread.finished.connect(self._render_cleanup); thread.finished.connect(thread.deleteLater)
         self._render_thread = thread; self._render_worker = worker; self._set_rendering(True); self.statusBar().showMessage("Building variable-height Contour relief…"); thread.start()
 
@@ -495,11 +547,15 @@ class MainWindow(QMainWindow):
 
     def _mesh_geometry_ready(self, result: object) -> None:
         self.cached_mesh_result = result; self.workflow_state.mesh_valid = True
+        self.mesh_view.set_mesh(result, self.workflow_state.colours)
         self.mesh_summary.setText(
             f"{result.width_mm:.1f} × {result.height_mm:.1f} mm | {len(result.mesh.vertices):,} vertices | "
             f"{len(result.mesh.faces):,} faces | Watertight: {'yes' if result.watertight else 'no'} | "
             f"Relief: {result.ridge_height_range[0]:.2f}–{result.ridge_height_range[1]:.2f} mm"
         )
+        profile = self.print_profile.customised(nozzle_diameter=self.nozzle_spin.value(), layer_height=self.layer_spin.value())
+        warnings = validate_printability(profile, minimum_width=self.minimum_feature.value(), height_range=result.ridge_height_range, base_thickness=self.base_thickness.value(), mesh_resolution=self.mesh_resolution.value(), triangle_count=len(result.mesh.faces), physical_width=self.mesh_width.value())
+        self.print_warnings.setText("No printability warnings." if not warnings else "\n".join(f"• {warning}" for warning in warnings))
 
     def _contour_geometry_ready(self, result: object) -> None:
         self.cached_contour_result = result; self.workflow_state.contour_valid = True; self.workflow_state.analysis_valid = True
@@ -535,15 +591,101 @@ class MainWindow(QMainWindow):
         if not chosen.isValid(): return
         colours = ReliefColours(chosen.name().upper(), self.workflow_state.colours.contour) if target == "base" else ReliefColours(self.workflow_state.colours.base, chosen.name().upper())
         self.workflow_state.set_colours(colours); self._update_colour_buttons()
-        if self.cached_mesh_result is not None: self.relief_view.set_image(render_relief_preview(self.cached_mesh_result, colours))
+        self.mesh_view.set_colours(colours)
 
     def _reset_colours(self) -> None:
         self.workflow_state.set_colours(ReliefColours()); self._update_colour_buttons()
-        if self.cached_mesh_result is not None: self.relief_view.set_image(render_relief_preview(self.cached_mesh_result, self.workflow_state.colours))
+        self.mesh_view.set_colours(self.workflow_state.colours)
 
     def _update_colour_buttons(self) -> None:
         for button, colour in ((self.base_colour_button, self.workflow_state.colours.base), (self.contour_colour_button, self.workflow_state.colours.contour)):
             button.setText(colour); button.setStyleSheet(f"background-color: {colour}; color: {'white' if QColor(colour).lightness() < 128 else 'black'};")
+
+    def _analysis_finished(self, analysis: object) -> None:
+        """Present editable, deliberately uncertain findings from Image DNA."""
+        self.current_analysis = analysis
+        self.focus_features = suggest_focus_features(analysis)
+        self._rebuild_focus_cards()
+        faces = len(getattr(analysis, "face_rectangles", ()))
+        parts = ["ReCraft found a likely central subject and candidate silhouette"]
+        if faces: parts.append(f"{faces} possible face region{'s' if faces != 1 else ''}")
+        if any(feature.identifier == "background-pattern" for feature in self.focus_features): parts.append("prominent background texture")
+        self.analysis_summary.setText("; ".join(parts) + ". These are visual suggestions, not certain scene labels. Choose what Contour should preserve.")
+
+    def _rebuild_focus_cards(self) -> None:
+        while self.focus_cards_layout.count():
+            item = self.focus_cards_layout.takeAt(0)
+            if item.widget(): item.widget().deleteLater()
+        for feature in self.focus_features:
+            row = QWidget(); layout = QHBoxLayout(row); layout.setContentsMargins(0, 0, 0, 0)
+            label = QLabel(f"{feature.label} — {feature.explanation}"); label.setWordWrap(True); layout.addWidget(label, 1)
+            choice = QComboBox()
+            for action in FocusAction: choice.addItem(action.value.title(), action)
+            choice.setCurrentIndex(choice.findData(feature.action)); choice.currentIndexChanged.connect(lambda index, candidate=feature, combo=choice: self._focus_action_changed(candidate, combo.currentData()))
+            layout.addWidget(choice); self.focus_cards_layout.addWidget(row)
+
+    def _focus_action_changed(self, feature: object, action: FocusAction) -> None:
+        feature.action = action
+        self._apply_focus_masks()
+
+    def _apply_focus_masks(self) -> None:
+        if self.user_importance is None or not self.focus_features: return
+        shape = self.focus_features[0].mask.shape; add = np.zeros(shape, np.float32); reduce = np.zeros(shape, np.float32)
+        for feature in self.focus_features:
+            if feature.action is FocusAction.ADD: add = np.maximum(add, feature.mask)
+            elif feature.action in (FocusAction.REDUCE, FocusAction.IGNORE): reduce = np.maximum(reduce, feature.mask * (1 if feature.action is FocusAction.IGNORE else .65))
+        self.user_importance.focus_add_prepared = add; self.user_importance.focus_reduce_prepared = reduce
+        self.workflow_state.invalidate_importance(); self.cached_contour_result = self.cached_mesh_result = None; self._invalidate_output(); self._refresh_source_mode()
+
+    def _reset_focus_suggestions(self) -> None:
+        for feature in self.focus_features: feature.action = FocusAction.AUTO
+        self._apply_focus_masks(); self._rebuild_focus_cards()
+
+    def _apply_focus_description(self) -> None:
+        intent = interpret_focus_description(self.focus_description.toPlainText())
+        for feature in self.focus_features:
+            identity = feature.identifier
+            if ("face" in identity and "face" in intent.add_types) or ("subject" in identity and "subject" in intent.add_types) or ("silhouette" in identity and "silhouette" in intent.add_types) or ("background" in identity and "background" in intent.add_types): feature.action = FocusAction.ADD
+            if ("background" in identity and "background" in intent.reduce_types) or ("bright" in identity and "bright" in intent.reduce_types): feature.action = FocusAction.REDUCE
+        if intent.background_amount is not None: self.background_strength.setValue(intent.background_amount)
+        self.analysis_summary.setText(f"Description mapped to existing analysis: {intent.explanation}. Unsupported wording is ignored rather than treated as scene understanding.")
+        self._apply_focus_masks(); self._rebuild_focus_cards()
+
+    def _preset_changed(self) -> None:
+        name = self.preset_combo.currentData()
+        if name is not None: self._apply_preset(self.preset_state.select(name))
+
+    def _reset_to_preset(self) -> None:
+        self._apply_preset(self.preset_state.reset())
+
+    def _apply_preset(self, preset: object) -> None:
+        values = {"detail": preset.detail, "smoothing": preset.smoothing, "simplification": preset.simplification, "minimum_path_length": preset.minimum_path_length, "minimum_spacing": preset.minimum_spacing, "line_weight": preset.line_weight, "subject_emphasis": preset.subject_emphasis, "background_reduction": preset.background_reduction}
+        for key, value in values.items():
+            if key in self.parameter_widgets: self.parameter_widgets[key].setValue(value)
+        self.ridge_width.setValue(preset.ridge_width); self.minimum_height.setValue(preset.minimum_height); self.maximum_height.setValue(preset.maximum_height); self.relief_strength.setValue(preset.relief_strength); self.mesh_resolution.setValue(preset.mesh_resolution)
+        self.preset_description.setText(preset.description); self.preset_modified.setText(f"{preset.name.value} defaults")
+        self.cached_contour_result = self.cached_mesh_result = None
+        if self.source_image is not None: self._generate()
+
+    def _profile_changed(self) -> None:
+        self.print_profile = PROFILES[self.profile_combo.currentData()]
+        self.nozzle_spin.setValue(self.print_profile.nozzle_diameter); self.layer_spin.setValue(self.print_profile.layer_height); self.minimum_feature.setValue(self.print_profile.minimum_contour_width)
+
+    def _print_settings_changed(self) -> None:
+        self.cached_mesh_result = None; self.workflow_state.invalidate_relief()
+
+    def _refresh_source_mode(self) -> None:
+        if self.prepared_preview is None: return
+        mode = self.source_view_mode.currentText()
+        if mode == "Prepared image": self.prepared_view.set_image(self.prepared_preview)
+        elif mode == "Importance overlay": self._refresh_prepared()
+        elif mode == "Background suppression" and self.current_analysis is not None: self.prepared_view.set_image(self.current_analysis.debug_image("Background Mask"))
+        elif mode == "Relief-height map" and self.cached_contour_result is not None: self.prepared_view.set_image(contour_height_image(self.cached_contour_result))
+        elif mode == "Suggested focus features" and self.current_analysis is not None:
+            base = np.asarray(self.prepared_preview).astype(np.float32); overlay = np.zeros(base.shape[:2], np.float32)
+            for feature in self.focus_features: overlay = np.maximum(overlay, np.asarray(Image.fromarray((feature.mask * 255).astype(np.uint8)).resize(self.prepared_preview.size, Image.Resampling.BILINEAR), np.float32) / 255)
+            tint = np.zeros_like(base); tint[..., 1] = 255; alpha = overlay[..., None] * .42; self.prepared_view.set_image(Image.fromarray(np.clip(base * (1 - alpha) + tint * alpha, 0, 255).astype(np.uint8)))
+        else: self.prepared_view.set_image(self.prepared_preview)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Keep the window alive until its current worker safely finishes."""

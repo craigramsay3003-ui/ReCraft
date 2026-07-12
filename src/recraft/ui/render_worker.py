@@ -23,6 +23,7 @@ class RenderWorker(QObject):
     failed = Signal(str)
     finished = Signal()
     geometry_ready = Signal(object)
+    analysis_ready = Signal(object)
 
     def __init__(
         self,
@@ -50,6 +51,7 @@ class RenderWorker(QObject):
             if self._export_path is None:
                 if self._debug_view:
                     analysis = analyse_prepared_preview(self._source, self._settings, user_importance=self._user_importance)
+                    self.analysis_ready.emit(analysis)
                     if self._debug_view in ("Raw Contour Paths", "Filtered Contour Paths", "Contour Importance View", "Contour Height View"):
                         generator = getattr(self._style, "generate", None)
                         if generator is None: raise ValueError("Contour diagnostics require the Contour style")
@@ -72,6 +74,7 @@ class RenderWorker(QObject):
                 else:
                     if getattr(self._style, "identifier", "") == "contour":
                         analysis = analyse_prepared_preview(self._source, self._settings, user_importance=self._user_importance)
+                        self.analysis_ready.emit(analysis)
                         contours = self._style.generate(analysis, self._parameters)
                         self.geometry_ready.emit(contours)
                         result = render_contours(contours, int(self._parameters.get("line_weight", 1)))

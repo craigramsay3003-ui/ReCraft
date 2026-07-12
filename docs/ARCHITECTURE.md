@@ -46,7 +46,8 @@ independent of Qt.
 Each Contour path now carries peak importance, subject/background membership,
 and a smoothed local relief profile. The mesh maps it between validated minimum
 and maximum heights after relief-strength and background-reduction controls.
-`ContourWorkflowState` owns the progressive stage and dependency invalidation:
+`ContourWorkflowState` retains dependency invalidation and material state while
+the UI uses one persistent-preview workspace rather than progressive pages:
 colours do not invalidate geometry, relief preserves analysis/paths, and
 preparation invalidates all downstream products.
 

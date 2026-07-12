@@ -484,3 +484,55 @@ Final feature-branch validation:
   variable-relief controls, material swatches, STL warning, and 3MF control were
   present. The application was then closed normally.
 - Stable local main and origin/main both remained at 4a479ff.
+
+
+FEATURE BRANCH — PREVIEW-LED CONTOUR WORKSPACE — 12 JULY 2026
+
+- The five-page wizard was manually tested and rejected as unintuitive. It was
+  replaced on feature/contour-workflow-relief with one persistent workspace:
+  prepared/analysis, 2D Contour, and actual 3D export geometry remain visible.
+- Added orbit, zoom, pan, fit/reset, standard views, perspective/orthographic
+  camera, edge overlay, accurate independent colours, and a neutral reference.
+- Added honest Image DNA candidates (likely subject, possible face, silhouette,
+  highlights, background texture), editable actions, shared focus masks, and
+  local keyword mapping. This is not arbitrary semantic scene understanding.
+- Added central Detailed, Standard, and Abstract multi-parameter presets;
+  selections survive preset changes and reset restores exact defaults.
+- Added importance-driven smooth path widths plus uniform-width compatibility,
+  print-safe clamps, and retain/remove/simplify/raise/lower/widen diagnostics.
+- Added Bambu H2C and Custom printer-profile models. Nozzle and layer height are
+  editable. Warnings cover narrow lines, sub-layer height changes, thin bases,
+  excessive complexity, and undersized artwork.
+- Added Fast, Balanced, and Final preview settings. Preview mesh reduction does
+  not affect requested full-quality STL/3MF export.
+- Updated README, architecture, roadmap, Contour workflow, and headless tests.
+- The private golden family photograph remains local-only and must never be
+  committed, packaged, used as a fixture, or included in public screenshots.
+
+Local testing after pulling this branch:
+
+  git switch feature/contour-workflow-relief
+  git pull
+  .\.venv\Scripts\python.exe -m pytest
+  .\.venv\Scripts\python.exe -m recraft
+
+Use left-drag to orbit the mesh, Shift-drag or middle-drag to pan, and the wheel
+to zoom. Test all presets, focus actions/description, brushes, Bambu H2C nozzle
+and layer settings, STL, and coloured 3MF. Inspect the printability warnings.
+
+Validation/build result for this change:
+
+- 79 automated tests passed on Python 3.14.6, including the tests-first release
+  build run; source compilation, imports, and off-screen window construction pass.
+- Existing synthetic export tests confirm watertight STL, separate-colour 3MF,
+  and unmirrored asymmetric geometry using the shared mesh.
+- Windows artifacts were overwritten successfully:
+  dist/ReCraft/ReCraft.exe (10,708,571 bytes)
+  dist/ReCraft-Setup.exe (95,341,186 bytes)
+- The installed Program Files copy is an older build and remained separately
+  visible during desktop inspection; use the new branch installer or launch the
+  exact dist executable above for this preview-led build.
+- Remaining limitations: suggestions are visual/keyword based rather than an
+  arbitrary language/semantic model; the software 3D viewer samples faces only
+  for display performance but never substitutes or changes exported geometry;
+  Bambu Studio was not automated, so 3MF structure is validated programmatically.

@@ -1,40 +1,58 @@
-# Guided Contour Workflow
+# Preview-led Contour workspace
 
-The Contour experience has five compact stages. The prepared canvas remains
-visible beside them so composition and painting stay immediate.
+The five-page wizard was tested and rejected: it separated controls from the
+artwork and made comparisons slow. Contour now uses one creative workspace with
+persistent prepared/analysis, 2D Contour, and actual 3D export-geometry views.
+A collapsible side panel holds interpretation, presets, preparation, advanced
+Contour/relief settings, printer profile, colours, and export.
 
-1. **Prepare Image** — crop viewport, rotate, flip, Fit/Fill, aspect and size.
-2. **Choose Subject Importance** — optional automatic/user importance, brushes,
-   selections, overlay, and background suppression.
-3. **Design Contours** — Detail, Smoothing, Subject Emphasis, Background
-   Reduction, Simplification, Minimum Line Length/Spacing, and Line Weight.
-   Major-only and inversion controls are collapsed under Advanced.
-4. **Build Relief** — physical size, base, variable minimum/maximum height,
-   ridge width, border, relief contrast/smoothing, background reduction, curve
-   quality, printable minimum, and uniform-height comparison.
-5. **Preview and Export** — 2D artwork, material relief, mesh summary,
-   independent colours, PNG, geometry-only STL, and coloured 3MF.
+The 2D views support wheel zoom, drag pan, fit, and 100% navigation. The 3D view
+uses the same mesh as STL/3MF and supports left-drag orbit, Shift/centre-drag
+pan, wheel zoom, fit/reset, standard views, perspective/orthographic projection,
+and optional edges. Camera and colour changes never rebuild geometry.
 
-Back and Next preserve settings. Preparation invalidates all later stages;
-importance/art changes invalidate paths and mesh; relief invalidates only mesh;
-colours only redraw materials.
+## Suggestions and focus
 
-## Variable-height calculation
+Image DNA is analysed first. ReCraft presents uncertain candidates such as
+Likely subject, Possible face, Suggested silhouette, bright areas, and prominent
+background texture. Each may remain automatic, add focus, reduce focus, or be
+ignored. Candidate masks and manual brushes feed the same combined-importance
+model and survive preset changes.
 
-Each `ContourPath` stores average/peak importance, subject/background membership,
-and a smoothed per-point relief profile. The profile combines importance,
-subject/face evidence, local contrast, and inverse background evidence. Mesh
-generation applies background reduction and relief strength, then maps safely
-between minimum and maximum millimetres. Uniform mode uses one height.
+The description box performs an honest local keyword mapping. Supported words
+such as face, silhouette, subject, clothing, background, ceiling, lights, and
+architecture map onto existing masks and settings. It is not an arbitrary
+scene-language model; unsupported wording is ignored.
 
-## Orientation
+## Creative presets
 
-Image X maps directly to Cartesian X. Downward image Y is inverted to upward
-Cartesian Y during mesh generation. Preview, STL, and 3MF consume the same mesh.
-An optional developer arrow is off for normal exports.
+- **Detailed**: 24 bands, simplification 0.45, 1 px line, 0.9 mm nominal ridge,
+  0.3–2.2 mm relief, and mesh quality 230.
+- **Standard**: 15 bands, simplification 1.0, 2 px line, 1.2 mm ridge,
+  0.4–1.8 mm relief, and mesh quality 160. This is the default.
+- **Abstract**: 8 bands, simplification 2.8, 3 px line, 1.8 mm ridge,
+  0.6–1.6 mm relief, stronger background reduction, and mesh quality 100.
 
-## Colour and formats
+Advanced controls remain available in collapsed sections. Focus selections are
+preserved when presets change.
 
-Base and Contour colours are separate validated `#RRGGBB` values. The preview
-shades the real mesh with both. STL contains geometry only. 3MF carries Base and
-Contour Relief material assignments for slicer mapping.
+## Relief, width, and printing
+
+Each `ContourPath` stores importance, subject/background membership, smoothed
+point heights, and optional point widths. Importance, subject/face evidence,
+contrast, and inverse background evidence influence retention, simplification,
+height, and width. Uniform modes remain available. Diagnostics explain whether
+a path was removed, retained, simplified, raised, lowered, or widened.
+
+Print assumptions live in profiles. **Bambu H2C** is the initial test profile,
+with editable nozzle diameter and layer height; **Custom printer** keeps the
+pipeline portable. Warnings cover narrow contours, sub-layer relief changes,
+thin bases, excessive complexity, and small physical size. Fast/Balanced/Final
+affect preview geometry only; export uses full requested settings.
+
+Image X maps directly to Cartesian X and image Y is inverted once. Preview, STL,
+and 3MF consume the same mesh. STL contains geometry only; 3MF stores separate
+Base and Contour Relief materials and colours.
+
+The private golden family image is for local manual evaluation only. Never
+commit, package, fixture, or publish screenshots of it.
