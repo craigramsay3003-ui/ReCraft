@@ -17,6 +17,10 @@ class ContourPath:
     level: float
     importance: float
     closed: bool
+    peak_importance: float = 0.0
+    subject_membership: float = 0.0
+    background_membership: float = 0.0
+    relief_values: tuple[float, ...] = ()
 
     @property
     def length(self) -> float:
@@ -47,6 +51,7 @@ class ContourSettings:
     line_weight: int = 1
     simplification: float = 1.0
     minimum_spacing: float = 5.0
+    minimum_path_length: float = 10.0
     invert: bool = False
     major_only: bool = False
 
@@ -59,9 +64,12 @@ def extract_contours(analysis: ImageAnalysis, settings: ContourSettings) -> Cont
     smoothed = cv2.GaussianBlur((grey * 255).astype(np.uint8), (0, 0), sigma)
     importance = analysis.map_at_image_size(analysis.importance_map)
     background = analysis.map_at_image_size(analysis.background_mask)
+    subject = analysis.map_at_image_size(analysis.subject_mask)
+    face = analysis.map_at_image_size(analysis.face_mask)
+    contrast = analysis.map_at_image_size(analysis.local_contrast)
     raw: list[ContourPath] = []; kept: list[ContourPath] = []
     levels = np.linspace(18, 237, max(3, settings.detail))
-    min_length = max(10.0, min(analysis.image.size) * 0.018)
+    min_length = max(settings.minimum_path_length, min(analysis.image.size) * 0.018)
     for level_index, level in enumerate(levels):
         binary = (smoothed >= level).astype(np.uint8) * 255
         found, _ = cv2.findContours(binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
@@ -70,9 +78,27 @@ def extract_contours(analysis: ImageAnalysis, settings: ContourSettings) -> Cont
             if len(points) < 3: continue
             closed = float(np.linalg.norm(points[0] - points[-1])) <= 2.0
             sampled_importance = float(importance[points[:, 1], points[:, 0]].mean())
+            peak_importance = float(np.percentile(importance[points[:, 1], points[:, 0]], 90))
             sampled_background = float(background[points[:, 1], points[:, 0]].mean())
             simplified = cv2.approxPolyDP(contour, max(0.1, settings.simplification), closed)[:, 0, :]
-            path = ContourPath(tuple((float(x), float(y)) for x, y in simplified), float(level / 255), sampled_importance, closed)
+            sx, sy = simplified[:, 0], simplified[:, 1]
+            local_relief = (
+                0.42 * importance[sy, sx]
+                + 0.20 * subject[sy, sx]
+                + 0.16 * face[sy, sx]
+                + 0.12 * contrast[sy, sx]
+                + 0.10 * (1.0 - background[sy, sx])
+            ).astype(np.float32)
+            if len(local_relief) > 2:
+                kernel = min(len(local_relief) if len(local_relief) % 2 else len(local_relief) - 1, 9)
+                if kernel >= 3:
+                    local_relief = cv2.GaussianBlur(local_relief.reshape(1, -1), (kernel, 1), 0).ravel()
+            local_relief = np.clip(local_relief, 0, 1)
+            path = ContourPath(
+                tuple((float(x), float(y)) for x, y in simplified), float(level / 255), sampled_importance, closed,
+                peak_importance, float(subject[points[:, 1], points[:, 0]].mean()), sampled_background,
+                tuple(float(value) for value in local_relief),
+            )
             raw.append(path)
             required = min_length * (1.7 - settings.subject_emphasis * sampled_importance)
             required *= 1 + settings.background_reduction * sampled_background * 2
@@ -102,4 +128,16 @@ def contour_importance_image(result: ContourResult) -> Image.Image:
         points = np.rint(path.points).astype(np.int32).reshape(-1, 1, 2)
         colour = (round(255 * (1 - path.importance)), round(255 * path.importance), 60)
         cv2.polylines(canvas, [points], path.closed, colour, 1, cv2.LINE_AA)
+    return Image.fromarray(canvas, "RGB")
+
+
+def contour_height_image(result: ContourResult) -> Image.Image:
+    """Render the normalized per-point relief values for diagnostics."""
+    canvas = np.zeros((result.height, result.width, 3), np.uint8)
+    for path in result.paths:
+        values = path.relief_values or tuple(path.importance for _ in path.points)
+        for index in range(max(0, len(path.points) - 1)):
+            value = (values[min(index, len(values) - 1)] + values[min(index + 1, len(values) - 1)]) / 2
+            colour = (round(255 * (1 - value)), round(90 * value), round(255 * value))
+            cv2.line(canvas, tuple(np.rint(path.points[index]).astype(int)), tuple(np.rint(path.points[index + 1]).astype(int)), colour, 2, cv2.LINE_AA)
     return Image.fromarray(canvas, "RGB")
