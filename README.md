@@ -116,6 +116,21 @@ python -m pip install -e ".[dev]"
 pytest
 ```
 
+## Building the Windows application
+
+Install Inno Setup 6, then double-click `Build ReCraft.cmd`, or run the release
+script from any directory:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_release.ps1
+```
+
+The repeatable build updates `.venv`, runs the full suite, creates the windowed
+one-folder application at `dist/ReCraft/ReCraft.exe`, and creates
+`dist/ReCraft-Setup.exe`. Existing generated outputs are safely replaced. Install
+the newest build with `scripts/install_latest.ps1`. Target computers do not need
+Python. See `docs/WINDOWS_PACKAGING.md` for prerequisites and diagnostics.
+
 ## Project structure
 
 Processing code lives in `src/recraft/core` and `src/recraft/styles`; the

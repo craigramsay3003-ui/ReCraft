@@ -389,3 +389,54 @@ Exact local commands:
 
 Private golden-image testing is in docs/GOLDEN_IMAGE_TESTING.md. Never commit the
 private photograph or private derivative artifacts.
+
+
+WINDOWS PACKAGING CHANGELOG — 12 JULY 2026
+
+Added a repeatable Windows release workflow:
+
+- scripts/build_release.ps1 creates/reuses .venv, installs current project plus
+  dev/build extras, runs pytest, safely replaces build/dist, builds a windowed
+  PyInstaller one-folder app, locates Inno Setup, builds the installer, validates
+  both outputs, and reports version, test status, paths, and sizes.
+- scripts/install_latest.ps1 locates and launches dist/ReCraft-Setup.exe without
+  deleting user data.
+- Build ReCraft.cmd runs the build by double-click with a process-only execution
+  policy bypass.
+- packaging/recraft.spec includes PySide6 hooks/plugins, OpenCV data, hidden
+  SciPy/trimesh runtime imports, assets, icon, and no console window.
+- packaging/installer.iss installs under Program Files, supports upgrades and
+  uninstall, creates a Start Menu shortcut, and offers a desktop shortcut.
+- Added tracked SVG/ICO application assets and runtime window icon.
+- Added core/paths.py for future settings under %LOCALAPPDATA%\ReCraft.
+- Added docs/WINDOWS_PACKAGING.md and packaging regression tests.
+- pyproject.toml is the authoritative 0.1.0 version source; Inno receives it at
+  build time rather than duplicating it.
+
+Actual local release build:
+
+- 65 tests passed on Python 3.14.6.
+- PyInstaller 6.21.0 produced dist/ReCraft/ReCraft.exe (10,652,105 bytes) and
+  its self-contained one-folder runtime.
+- Inno Setup 6.7.3 produced dist/ReCraft-Setup.exe (95,292,852 bytes).
+- The packaged ReCraft executable was launched and visually verified: its main
+  window, icon, preparation, importance, style, and Contour STL panels appeared;
+  no console window appeared.
+- PyInstaller warnings were inspected. Remaining entries are platform-specific
+  or optional imports from SciPy, NumPy, Pillow, and trimesh; the packaged main
+  window and required top-level imports launched successfully.
+
+Generated executable, installer, build output, and virtual environment remain
+ignored and are not committed.
+
+Exact build command:
+
+  powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_release.ps1
+
+Exact install command:
+
+  powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install_latest.ps1
+
+For future tasks, “build the latest version” means run this complete tests-first
+release workflow after implementing the requested code and overwrite the prior
+generated executable and installer.
