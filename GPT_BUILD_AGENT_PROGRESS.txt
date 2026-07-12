@@ -1,0 +1,97 @@
+ReCraft development progress update — 12 July 2026
+
+Repository: craigramsay3003-ui/ReCraft
+Default branch: main
+Latest implementation commit: 9d9efbf — Initial ReCraft application foundation
+Status: committed and pushed to GitHub. The local main branch was synchronized
+with origin/main after the push.
+
+WHAT HAS BEEN COMPLETED
+
+- Created a working Python 3.11+ desktop prototype using PySide6.
+- Added a src-based project structure under src/recraft.
+- Added image selection, original-image display, transformed preview, PNG
+  export, status messages, and error handling.
+- Added dynamic style selection and parameter controls.
+- Implemented three real procedural styles:
+  - Contour: greyscale topographic isolines with adjustable density.
+  - Halftone: brightness-based circles with adjustable cell size and contrast.
+  - Fragment: edge-aware Delaunay triangulation that samples colours from the
+    source image.
+- Created an abstract ArtStyle interface with:
+  - unique identifier
+  - display name
+  - description
+  - parameter definitions and defaults
+  - parameter validation
+  - independent process(image, parameters) method
+- Created a central style registry. The UI has no style-specific processing
+  logic.
+- Kept processing independent of PySide6 so it can later support batch tools,
+  command-line processing, exporters, and mesh generation.
+- Added recraft and python -m recraft application entry points.
+- Added pyproject.toml, requirements.txt, a Python .gitignore, and an MIT
+  licence.
+- Replaced the README with installation, usage, testing, architecture,
+  style-extension, roadmap, status, and licence information.
+- Added docs/VISION.md, docs/ROADMAP.md, docs/ARCHITECTURE.md, and
+  examples/README.md.
+- Added tests for image loading, invalid paths, registry metadata, duplicate
+  registration, every style's output, dimensions, image modes, and parameter
+  validation.
+
+VALIDATION COMPLETED BY CODEX
+
+- 11 tests passed.
+- Source compilation passed.
+- Core imports and registry creation passed.
+- The PySide6 window was constructed successfully in off-screen mode.
+- python -m recraft completed a timed off-screen startup test successfully.
+- The committed working tree was clean and synchronized with GitHub.
+
+IMPORTANT: LOCAL USER SETUP HAS NOT YET BEEN RUN
+
+The repository code was validated by Codex using its bundled Python runtime.
+The user has NOT yet run the following PowerShell setup and launch commands on
+their own local Python installation:
+
+  python -m venv .venv
+  .venv\Scripts\activate
+  python -m pip install -e ".[dev]"
+  recraft
+
+Alternative launch command after installation:
+
+  python -m recraft
+
+Test command after installation:
+
+  pytest
+
+IMPORTANT CURRENT LIMITATIONS AND DECISIONS
+
+- Version 0.1 generates 2D raster images only.
+- There is no vector, SVG, mesh, STL, or 3MF export yet.
+- Processing currently runs synchronously in the UI, so larger images may
+  temporarily block interaction.
+- Images are reduced to a maximum preview dimension of 1400 pixels before
+  processing.
+- Fragment uses SciPy Delaunay triangulation and OpenCV feature detection.
+- OpenCV is supplied through opencv-python-headless because the desktop
+  interface is provided by PySide6.
+- Built-in style registration is explicit in create_default_registry. Adding a
+  style requires adding its instance there, but no UI modification is required.
+- This is an early experimental prototype and is not affiliated with HueForge
+  or other existing software.
+
+SUGGESTED NEXT STEPS
+
+1. Run the local PowerShell installation commands above.
+2. Manually test the application with several real photographs and assess the
+   visual quality of all three styles.
+3. Move processing into a worker thread and add progress/cancellation support.
+4. Improve preview versus full-resolution export handling.
+5. Add presets, undo/redo, and project-file support.
+6. Improve Fragment sampling and add further styles such as Voronoi or flow
+   fields.
+7. Begin SVG/vector export only after the 2D processing workflow is stable.
