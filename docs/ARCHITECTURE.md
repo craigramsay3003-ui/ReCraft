@@ -41,6 +41,20 @@ and temporarily locks conflicting controls until the job finishes. Results and
 useful error messages return through Qt signals; processing algorithms remain
 independent of Qt.
 
+## Guided variable-height relief
+
+Each Contour path now carries peak importance, subject/background membership,
+and a smoothed local relief profile. The mesh maps it between validated minimum
+and maximum heights after relief-strength and background-reduction controls.
+`ContourWorkflowState` retains dependency invalidation and material state while
+the UI uses one persistent-preview workspace rather than progressive pages:
+colours do not invalidate geometry, relief preserves analysis/paths, and
+preparation invalidates all downstream products.
+
+The shared mesh transform keeps image X as Cartesian X and converts downward
+image Y to upward Cartesian Y. Material preview, STL, and 3MF use that mesh.
+3MF contains Base and Contour Relief material assignments; STL is colourless.
+
 ## Style plugin system
 
 `ArtStyle` defines the contract: identifier, display name, description, parameters, validation, and processing. `StyleRegistry` stores unique styles and supplies them to clients.

@@ -67,6 +67,25 @@ watertightness, and reports millimetre dimensions, vertices, faces, and path.
 STL currently supports Contour only. Inspect every STL in a slicer before
 printing. ReCraft enforces a default 0.8 mm minimum ridge width, but the correct
 minimum depends on printer and material.
+
+## Preview-led Contour relief workflow
+
+The tested five-page wizard has been replaced by one preview-led workspace. The
+prepared/analysis image, 2D Contour result, and navigable actual 3D mesh remain
+visible while compact collapsible controls change. Editable Image DNA focus
+suggestions, manual importance tools, local keyword mapping, and Detailed,
+Standard, and Abstract presets guide the workflow. Advanced controls are
+collapsed by default.
+
+The 3D viewer supports orbit, zoom, pan, fit/reset, standard views,
+perspective/orthographic projection, and edge overlay. Bambu H2C and Custom
+printer profiles provide editable nozzle/layer assumptions and printability
+warnings. Fast/Balanced/Final preview quality never lowers export quality.
+
+Choose independent Base and Contour colours for the shaded mesh preview. STL is
+geometry-only; coloured 3MF stores Base and Contour Relief material assignments.
+Mesh X preserves image left/right and image Y is converted to Cartesian Y. See
+`docs/CONTOUR_WORKFLOW.md`.
 - Contour, Halftone, and Fragment procedural styles.
 - Style-specific controls generated from reusable style metadata.
 - PNG export and a processing API independent of the interface.

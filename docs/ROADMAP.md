@@ -33,3 +33,12 @@ Depth-map generation, relief meshes, STL export, and 3MF investigation.
 ## Phase 1.0
 
 A polished desktop application with saved presets, an installer, a gallery, and physical-print validation.
+
+## Experimental Contour relief branch
+
+`feature/contour-workflow-relief` adds variable relief, independent materials,
+coloured 3MF, dependency-aware caching, and corrected shared mesh orientation.
+The multi-page wizard was tested and rejected. The branch now uses persistent
+2D/3D previews, editable visual-analysis suggestions, creative presets,
+importance-driven width/height, and Bambu H2C/Custom print profiles. It remains
+separate from stable main pending review.

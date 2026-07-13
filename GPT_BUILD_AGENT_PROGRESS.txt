@@ -440,3 +440,140 @@ Exact install command:
 For future tasks, “build the latest version” means run this complete tests-first
 release workflow after implementing the requested code and overwrite the prior
 generated executable and installer.
+
+
+FEATURE BRANCH — GUIDED CONTOUR RELIEF — 12 JULY 2026
+
+Branch: feature/contour-workflow-relief, created from stable main 4a479ff and
+pushed with upstream tracking. Do not merge without explicit instruction.
+
+- Five-stage guided workflow with persistent canvas, Back/Next, preserved
+  settings, collapsed Advanced controls, and separate diagnostics.
+- Dependency-aware state: preparation invalidates all downstream work;
+  importance/art invalidates paths/mesh; relief invalidates mesh; colours redraw
+  materials without regenerating geometry.
+- ContourPath carries peak importance, subject/background membership, and a
+  smoothed per-point relief profile.
+- Variable heights combine importance, subject/face evidence, contrast, and
+  inverse background, then apply relief/background controls and safe mm bounds.
+- Uniform-height compatibility, height smoothing, printable minimum, curve
+  quality, physical height calculation, and developer orientation arrow.
+- Independent Base/Contour colours, resettable pickers, shaded mesh preview,
+  geometry-only STL explanation, and coloured 3MF material assignments.
+- Orientation keeps X unchanged and inverts image Y into Cartesian +Y for the
+  shared preview/STL/3MF mesh; this is not a camera workaround.
+- Added Contour Height diagnostics and synthetic orientation/material tests.
+
+See docs/CONTOUR_WORKFLOW.md for the staged workflow and calculations.
+
+Final feature-branch validation:
+
+- 74 automated tests passed on Python 3.14.6.
+- Source compilation and off-screen guided navigation passed.
+- Actual Qt background workers generated Contour paths, reused cached paths for
+  relief-only work, built a watertight mesh, and rendered the material preview.
+- Synthetic asymmetric STL remained left/right correct and watertight.
+- Synthetic coloured 3MF contained Base and Contour Relief assignments and
+  retained the same orientation. Structure was validated programmatically; it
+  was not opened in Bambu Studio to avoid disrupting existing user projects.
+- Full release build passed and overwrote local ignored development artifacts:
+  dist/ReCraft/ReCraft.exe (10,671,860 bytes) and dist/ReCraft-Setup.exe
+  (95,300,225 bytes).
+- The exact dist executable was launched and visually walked through Stages
+  1–5. The persistent canvas, Back/Next navigation, separate diagnostics,
+  variable-relief controls, material swatches, STL warning, and 3MF control were
+  present. The application was then closed normally.
+- Stable local main and origin/main both remained at 4a479ff.
+
+
+FEATURE BRANCH — PREVIEW-LED CONTOUR WORKSPACE — 12 JULY 2026
+
+- The five-page wizard was manually tested and rejected as unintuitive. It was
+  replaced on feature/contour-workflow-relief with one persistent workspace:
+  prepared/analysis, 2D Contour, and actual 3D export geometry remain visible.
+- Added orbit, zoom, pan, fit/reset, standard views, perspective/orthographic
+  camera, edge overlay, accurate independent colours, and a neutral reference.
+- Added honest Image DNA candidates (likely subject, possible face, silhouette,
+  highlights, background texture), editable actions, shared focus masks, and
+  local keyword mapping. This is not arbitrary semantic scene understanding.
+- Added central Detailed, Standard, and Abstract multi-parameter presets;
+  selections survive preset changes and reset restores exact defaults.
+- Added importance-driven smooth path widths plus uniform-width compatibility,
+  print-safe clamps, and retain/remove/simplify/raise/lower/widen diagnostics.
+- Added Bambu H2C and Custom printer-profile models. Nozzle and layer height are
+  editable. Warnings cover narrow lines, sub-layer height changes, thin bases,
+  excessive complexity, and undersized artwork.
+- Added Fast, Balanced, and Final preview settings. Preview mesh reduction does
+  not affect requested full-quality STL/3MF export.
+- Updated README, architecture, roadmap, Contour workflow, and headless tests.
+- The private golden family photograph remains local-only and must never be
+  committed, packaged, used as a fixture, or included in public screenshots.
+
+Local testing after pulling this branch:
+
+  git switch feature/contour-workflow-relief
+  git pull
+  .\.venv\Scripts\python.exe -m pytest
+  .\.venv\Scripts\python.exe -m recraft
+
+Use left-drag to orbit the mesh, Shift-drag or middle-drag to pan, and the wheel
+to zoom. Test all presets, focus actions/description, brushes, Bambu H2C nozzle
+and layer settings, STL, and coloured 3MF. Inspect the printability warnings.
+
+Validation/build result for this change:
+
+- 79 automated tests passed on Python 3.14.6, including the tests-first release
+  build run; source compilation, imports, and off-screen window construction pass.
+- Existing synthetic export tests confirm watertight STL, separate-colour 3MF,
+  and unmirrored asymmetric geometry using the shared mesh.
+- Windows artifacts were overwritten successfully:
+  dist/ReCraft/ReCraft.exe (10,708,571 bytes)
+  dist/ReCraft-Setup.exe (95,341,186 bytes)
+- The installed Program Files copy is an older build and remained separately
+  visible during desktop inspection; use the new branch installer or launch the
+  exact dist executable above for this preview-led build.
+- Remaining limitations: suggestions are visual/keyword based rather than an
+  arbitrary language/semantic model; the software 3D viewer samples faces only
+  for display performance but never substitutes or changes exported geometry;
+  Bambu Studio was not automated, so 3MF structure is validated programmatically.
+
+
+ISSUE #3 — CONTOUR WORKSPACE STABILITY — 13 JULY 2026
+
+Root causes found and resolved on feature/contour-workflow-relief:
+
+- The prepared-image layout existed but was never inserted into the visible
+  preview row. It is now persistently visible beside 2D Contour and 3D relief.
+- Focus/brush invalidation called a method that explicitly cleared the valid 2D
+  result. Derived state is now marked stale while the last valid previews remain.
+- Detailed could produce more than 12,000 paths and 300,000 path points without
+  a resource boundary. Mesh work now has safe path, point, triangle (250,000),
+  and estimated-memory (256 MiB) budgets with useful recoverable errors.
+- Camera painting repeatedly accessed trimesh vertices, faces, normals and lazy
+  caches from the Qt paint callback. MeshView now owns compact immutable render
+  buffers; camera actions cannot mutate or regenerate mesh geometry.
+- Standard relief work could repeat ImageAnalysis/Contour work. Workers now reuse
+  the cached analysis or contour result and record cache hits in stage metrics.
+- Recoverable worker and painter exceptions include tracebacks in the local log:
+  %LOCALAPPDATA%\ReCraft\recraft.log. No image pixels or private filenames are
+  deliberately written to diagnostics.
+
+Synthetic 1200×800 timing fixture, before/after reference:
+
+- Standard: analysis 0.44 s + contours 1.32 s + mesh 0.52 s before. With cached
+  analysis/contours, relief-only work avoids the first 1.76 s; measured mesh was
+  0.51 s, 4,678 paths, 45,194 points, 34,880 vertices, 69,756 faces, 2.8 MiB.
+- Detailed: analysis 0.45 s + contours 2.72 s + mesh 3.29 s before. After:
+  cached analysis 0.40 s initial-only, contours 2.73 s, mesh 3.20 s; 12,967 input
+  paths bounded to 12,000, 289,516 sampled points, 71,760 vertices, 143,516
+  faces, 5.7 MiB. A clear warning records the path-budget reduction.
+
+Validation at this checkpoint: 85 automated tests passed. New tests cover source
+visibility, brush mapping through display pan/zoom, preview preservation, bounded
+Detailed geometry, safe excessive-complexity failure, cache reuse, repeated
+camera interactions, immutable renderer buffers, and mesh lifetime ownership.
+
+The final tests-first Windows release build passed and overwrote:
+
+- dist/ReCraft/ReCraft.exe — 10,718,937 bytes
+- dist/ReCraft-Setup.exe — 95,345,279 bytes
