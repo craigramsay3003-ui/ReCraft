@@ -9,6 +9,8 @@ from recraft.core.mesh_camera import MeshCamera, ProjectionMode
 from recraft.exporters.contour_mesh import ContourMeshResult, ReliefColours
 from recraft.core.diagnostics import get_diagnostic_logger
 
+MAX_RENDER_FACES = 2500
+
 
 class MeshView(QWidget):
     """Orbitable viewer that never changes or regenerates export geometry."""
@@ -30,7 +32,7 @@ class MeshView(QWidget):
             # reaches into trimesh caches or mutates export geometry.
             mesh_vertices = np.asarray(result.mesh.vertices, np.float64)
             mesh_faces = np.asarray(result.mesh.faces, np.int64)
-            stride = max(1, int(np.ceil(len(mesh_faces) / 6000)))
+            stride = max(1, int(np.ceil(len(mesh_faces) / MAX_RENDER_FACES)))
             sampled = mesh_faces[::stride].copy(); unique, inverse = np.unique(sampled, return_inverse=True)
             self._vertices = mesh_vertices[unique].copy(); self._faces = inverse.reshape(-1, 3)
             edges_a = self._vertices[self._faces[:, 1]] - self._vertices[self._faces[:, 0]]; edges_b = self._vertices[self._faces[:, 2]] - self._vertices[self._faces[:, 0]]
