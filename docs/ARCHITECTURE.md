@@ -1,5 +1,38 @@
 # Architecture
 
+## Experimental printable-relief pipeline
+
+On `feature/printable-relief-reset`, the default application uses this bounded
+pipeline:
+
+`original image -> non-destructive fit/crop -> ReliefHeightMap -> structured plaque mesh -> preview/export`
+
+`recraft.relief.presets` owns the three centrally defined physical presets and
+the validated `ReliefSettings`. `heightmap.py` analyses only a bounded RGB copy,
+then combines broad luminance, local contrast, restrained gradient evidence,
+generic subject/face evidence, and background suppression. Robust normalization,
+morphological minimum-feature cleanup, and spike smoothing convert this into an
+immutable floating-point 0..1 field. Normal relief maps larger values outward;
+inversion is explicit and off by default.
+
+`relief.mesh` maps the field onto a regular millimetre grid. It creates a raised
+front, a flat rear at Z=0, and closed side walls as one object. Image X is kept
+unchanged and image Y alone is converted to Cartesian coordinates, so left and
+right are preserved. Preview and export call the same functions at different
+bounded resolutions. Triangle budgets are 150,000 for preview and 350,000 for
+export.
+
+`ReliefWorker` performs analysis, mesh construction, and file writing on a
+`QThread`. The last valid mesh remains visible until a replacement succeeds.
+Only geometry-affecting controls make the preview stale; camera interaction
+uses copied immutable render buffers and never regenerates geometry. Recoverable
+exceptions are shown to the user and written with tracebacks to the diagnostic
+log without image data or deliberate private filenames.
+
+The legacy Engine, styles, and Contour packages remain isolated so this branch
+can be evaluated without deleting prior research. `MainWindow` exposes only the
+relief workflow; there are not two competing primary interfaces.
+
 ## UI layer
 
 `recraft.ui` owns desktop interaction and image presentation. It asks the registry for style metadata and parameter definitions, so it contains no style-specific processing rules.

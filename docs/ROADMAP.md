@@ -42,3 +42,17 @@ The multi-page wizard was tested and rejected. The branch now uses persistent
 2D/3D previews, editable visual-analysis suggestions, creative presets,
 importance-driven width/height, and Bambu H2C/Custom print profiles. It remains
 separate from stable main pending review.
+
+## Printable relief reset branch
+
+`feature/printable-relief-reset` is a controlled product reset with a single
+near-term target: one recognisable, positive, watertight photograph relief that
+can be inspected and printed. The line-contour workspace is bypassed by a
+structured bas-relief height field, a flat-backed plaque mesh, a reduced
+interactive preview, and three physical presets. STL reliability, responsive
+UI, and conservative 0.4 mm nozzle defaults take precedence over semantic
+selection, painting, diagnostic dashboards, or additional art styles.
+
+The branch must remain experimental until a private golden-image print is
+inspected in Bambu Studio and physically printed. The private photograph, its
+filename, and screenshots must never enter the repository or package.

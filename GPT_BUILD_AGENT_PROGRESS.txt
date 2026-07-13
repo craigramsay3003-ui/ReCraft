@@ -577,3 +577,71 @@ The final tests-first Windows release build passed and overwrote:
 
 - dist/ReCraft/ReCraft.exe — 10,718,937 bytes
 - dist/ReCraft-Setup.exe — 95,345,279 bytes
+
+
+FEATURE BRANCH — PRINTABLE RELIEF RESET — 13 JULY 2026
+
+Branch: feature/printable-relief-reset (created from stable origin/main at
+baa8048; main was not modified).
+
+The exposed Contour workspace was bypassed by one preview-first photograph to
+positive-relief workflow. Added recraft.relief with central Portrait, Graphic,
+and Layered presets, a bounded luminance/contrast/edge/subject height-map
+composer, physical minimum-feature cleanup, and a deterministic structured-grid
+plaque. The mesh has a raised front, flat Z=0 rear, closed side walls, correct
+left/right orientation, positive relief by default, and watertight validation.
+
+MainWindow was replaced on this branch with persistent source and actual mesh
+previews plus a 280–360 px compact control column. Primary controls are Open,
+Fit/Crop, three styles, physical width, relief depth, background reduction,
+subject emphasis, Generate Relief, STL, and 3MF. Advanced is collapsed and
+contains only quality, contrast, base, minimum feature, nozzle, layer height,
+and explicit inversion. QThread generation reports named progress states and
+preserves the last valid preview on work or failure. Camera actions use at most
+2,500 copied immutable display faces and never regenerate geometry.
+
+Synthetic 1200x900 Portrait benchmark with default physical settings:
+
+- Preview: 150x112 height field, 67,196 triangles, 0.045 s measured generation.
+- Export: 260x195 height field, 202,796 triangles, 0.096 s measured generation.
+- STL write: 0.038 s.
+- Result: 160x120 mm, Z=0..3.3 mm (1.5 mm base + 1.8 mm relief), 7.16 MiB
+  estimated construction arrays, watertight true.
+- Local ignored test files: artifacts/printable-relief-reset/recraft-test-relief.stl
+  and recraft-test-relief.3mf. Synthetic data only.
+
+Focused and UI tests were rewritten around the reset. They cover normal/invert
+height direction, bounds, smoothing, subject/background effects, preset
+differences, flat rear, positive Z, dimensions, watertightness, orientation,
+preview/export structure, triangle limits, STL roundtrip, 1366x768 reachability,
+source/mesh visibility, stale/current/failure state, background generation, and
+camera non-invalidation. Obsolete tests enforcing the rejected complex Contour
+UI were removed. The current full-suite/build results and artifact sizes are
+recorded below after the release workflow completes.
+
+Remaining manual work: use the private golden image locally, inspect face/hair/
+dress/background recognisability, import and slice the synthetic and golden STL
+in Bambu Studio, then physically test print. Bambu validation was explicitly
+left to Craig for tomorrow. Never commit/package the private image or its name.
+
+Exact local test commands:
+
+  git switch feature/printable-relief-reset
+  git pull
+  .\.venv\Scripts\python.exe -m pip install -e ".[dev,build]"
+  .\.venv\Scripts\python.exe -m pytest
+  .\.venv\Scripts\python.exe -m recraft
+
+PowerShell activation is not required.
+
+Final validation and packaging:
+
+- 85 automated tests passed in the final tests-first release build.
+- Source compilation, import checks, off-screen 1366x768 construction, and a
+  hidden packaged-executable startup smoke test passed.
+- 3MF was checked programmatically for millimetre units, one printable build
+  object, and its display material.
+- dist/ReCraft/ReCraft.exe — 10,671,406 bytes.
+- dist/ReCraft-Setup.exe — 95,301,864 bytes.
+- Bambu Studio import/slicing and the private golden-image assessment remain
+  intentionally unclaimed; Craig will perform them manually tomorrow.

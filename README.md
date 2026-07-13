@@ -2,6 +2,37 @@
 
 **Create the impossible.**
 
+## Printable relief reset (experimental branch)
+
+`feature/printable-relief-reset` replaces the exposed Contour application with
+one focused workflow: open a photograph, choose a physical relief style,
+generate a positive bas-relief plaque, inspect it, and export STL or 3MF. The
+default interface contains one persistent source preview, one persistent 3D
+preview, a compact control column, and one **Generate Relief** action. The old
+Contour workspace remains in the source tree for reference but is not exposed
+by the default application on this branch.
+
+The three physical presets are:
+
+- **Portrait Relief** — continuous shallow tone with restrained edge, subject,
+  silhouette, and optional face emphasis; background evidence is reduced.
+- **Graphic Relief** — seven cleaned height levels with stronger structural
+  edges and poster-like tonal regions.
+- **Layered Relief** — five broad height bands, stronger smoothing, and reduced
+  fine texture for robust physical regions.
+
+Normal relief is the default: the rear is flat at 0 mm, the solid base is the
+lowest front surface, and image features project outward. A structured grid
+creates the front, rear, and side walls as one deterministic watertight plaque.
+Preview meshes are bounded to 150,000 triangles and exports to 350,000.
+
+The default Bambu H2C test assumptions are a 0.4 mm nozzle, 0.2 mm layers,
+160 mm width, 1.5 mm base, 1.8 mm relief depth, and 0.8 mm minimum feature.
+They are conservative starting points, not a substitute for slicer inspection.
+STL is the mandatory geometry-only output; 3MF currently contains the same
+single printable object with one display colour. See
+`docs/PRINTABLE_RELIEF_RESET.md`.
+
 ReCraft transforms ordinary images into mathematically generated artwork that would be difficult or unrealistic to design by hand. It is being developed as both a creative tool and a learning project, with the eventual goal of producing distinctive one-off physical art prints.
 
 ## What ReCraft is
@@ -93,6 +124,26 @@ Mesh X preserves image left/right and image Y is converted to Cartesian Y. See
 Version 0.1 produces 2D images only.
 
 ## Example workflow
+
+On `feature/printable-relief-reset`:
+
+1. Select **Open Image**.
+2. Choose **Fit full image** or **Crop to 4:5 plaque**.
+3. Choose Portrait, Graphic, or Layered Relief.
+4. Set physical width, relief depth, background reduction, and subject emphasis.
+5. Select **Generate Relief** and keep inspecting the previous valid preview
+   while work runs in the background.
+6. Orbit with left-drag, pan with middle-drag or Shift-drag, and zoom with the
+   wheel. Use Fit, Reset, Front, Perspective, or Orthographic when useful.
+7. Export STL or 3MF. Export regenerates the model at export resolution; it does
+   not upscale the preview mesh.
+
+Advanced settings are collapsed by default and contain only preview/export
+quality, contrast, base thickness, minimum feature, nozzle, layer height, and
+explicit inversion.
+
+The legacy style workflow below describes stable `main`, not the experimental
+reset branch.
 
 1. Select **Open Image** and choose a photograph. The imported source remains
    unchanged in memory.
