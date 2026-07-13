@@ -25,7 +25,7 @@ class ImageView(QLabel):
         self._view_offset = QPointF(0, 0)
         self._navigation_enabled = False
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setMinimumSize(280, 240)
+        self.setMinimumSize(220, 180)
         self.setStyleSheet(
             "QLabel { background: #20242a; color: #aeb5bf; "
             "border: 2px solid #596270; border-radius: 5px; }"
@@ -55,7 +55,12 @@ class ImageView(QLabel):
         self._view_zoom = 1 / max(fit, 1e-6); self._view_offset = QPointF(0, 0); self.update()
 
     def reset_view(self) -> None:
+        """Reset display-only zoom and pan."""
         self.fit_to_view()
+
+    def map_widget_to_image(self, x: float, y: float) -> tuple[float, float] | None:
+        """Map a widget position through display zoom/pan to image pixels."""
+        return self._image_point(x, y)
 
     def set_image(self, image: Image.Image | None) -> None:
         """Set the image presented by this widget."""

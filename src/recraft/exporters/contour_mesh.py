@@ -34,6 +34,10 @@ class ContourMeshSettings:
     background_relief_reduction: float = 0.55
     uniform_height: bool = False
     orientation_marker: bool = False
+    maximum_paths: int = 12_000
+    maximum_sampled_points: int = 300_000
+    maximum_triangles: int = 250_000
+    maximum_estimated_memory_mb: float = 256.0
 
     def validated(self) -> "ContourMeshSettings":
         """Validate printable physical dimensions."""
@@ -46,6 +50,8 @@ class ContourMeshSettings:
         if not 0 <= self.width_variation_strength <= 1: raise ValueError("Width variation strength must be between 0 and 1")
         if not 0 <= self.border_width <= 50: raise ValueError("Border width must be between 0 and 50 mm")
         if not 40 <= self.resolution <= 500: raise ValueError("Mesh resolution must be between 40 and 500")
+        if self.maximum_paths < 100 or self.maximum_sampled_points < 1_000: raise ValueError("Mesh path and sampling limits are too small")
+        if self.maximum_triangles < 10_000 or self.maximum_estimated_memory_mb < 32: raise ValueError("Mesh safety budgets are too small")
         if not 0.1 <= self.relief_strength <= 4: raise ValueError("Relief strength must be between 0.1 and 4")
         if not 0 <= self.height_smoothing <= 3: raise ValueError("Height smoothing must be between 0 and 3")
         if not 0 <= self.background_relief_reduction <= 1: raise ValueError("Background relief reduction must be between 0 and 1")
@@ -77,6 +83,22 @@ class ContourMeshResult:
     watertight: bool
     ridge_height_range: tuple[float, float]
     relief_map: np.ndarray
+    retained_path_count: int = 0
+    sampled_point_count: int = 0
+    estimated_memory_mb: float = 0.0
+    warnings: tuple[str, ...] = ()
+
+
+class MeshComplexityError(ValueError):
+    """Raised before allocation when requested mesh complexity is unsafe."""
+
+
+def estimate_mesh_resources(nx: int, ny: int) -> tuple[int, int, float]:
+    """Return projected vertex/face counts and working memory in MiB."""
+    vertices = 2 * nx * ny
+    faces = 4 * (nx - 1) * (ny - 1) + 2 * (2 * nx + 2 * ny - 4)
+    bytes_required = vertices * 3 * 8 + faces * 3 * 8 + nx * ny * 24
+    return vertices, faces, bytes_required / (1024 * 1024)
 
 
 def build_contour_mesh(result: ContourResult, settings: ContourMeshSettings) -> ContourMeshResult:
@@ -86,16 +108,35 @@ def build_contour_mesh(result: ContourResult, settings: ContourMeshSettings) -> 
     inner_w = state.physical_width; inner_h = inner_w / result.source_aspect_ratio
     total_w = inner_w + 2 * state.border_width; total_h = inner_h + 2 * state.border_width
     nx = state.resolution; ny = max(20, round(nx * total_h / total_w))
+    projected_vertices, projected_faces, estimated_memory = estimate_mesh_resources(nx, ny)
+    if projected_faces > state.maximum_triangles:
+        raise MeshComplexityError(f"Mesh would contain about {projected_faces:,} triangles, above the safe limit of {state.maximum_triangles:,}. Lower mesh quality or use a simpler preset.")
+    if estimated_memory > state.maximum_estimated_memory_mb:
+        raise MeshComplexityError(f"Mesh needs about {estimated_memory:.1f} MB, above the safe limit of {state.maximum_estimated_memory_mb:.1f} MB. Lower mesh quality.")
     ridge = np.zeros((ny, nx), np.float32)
     sx = (nx - 1) * inner_w / total_w / max(result.width - 1, 1)
     sy = (ny - 1) * inner_h / total_h / max(result.height - 1, 1)
     ox = (nx - 1) * state.border_width / total_w; oy = (ny - 1) * state.border_width / total_h
     pixel_mm = total_w / (nx - 1); thickness = max(1, round(state.ridge_width / pixel_mm))
-    for path in result.paths:
+    warnings: list[str] = []
+    selected_paths = list(result.paths)
+    if len(selected_paths) > state.maximum_paths:
+        selected_paths = sorted(selected_paths, key=lambda path: (path.importance + path.peak_importance, path.length), reverse=True)[:state.maximum_paths]
+        warnings.append(f"Retained the {state.maximum_paths:,} most important paths from {len(result.paths):,} to stay within the safe path budget.")
+    total_points = sum(len(path.points) for path in selected_paths)
+    point_stride = max(1, int(np.ceil(total_points / state.maximum_sampled_points)))
+    if point_stride > 1: warnings.append(f"Sampled every {point_stride}th path point to stay within the safe point budget.")
+    sampled_points = 0
+    for path in selected_paths:
         # Image X is retained; image Y is inverted into Cartesian +Y.
-        points = np.asarray([(ox + x * sx, (ny - 1) - (oy + y * sy)) for x, y in path.points], np.float32)
-        values = path.relief_values or tuple(path.importance for _ in path.points)
-        widths = path.width_values or tuple(1.0 for _ in path.points)
+        indexes = list(range(0, len(path.points), point_stride))
+        if len(path.points) > 1 and indexes[-1] != len(path.points) - 1: indexes.append(len(path.points) - 1)
+        sampled_points += len(indexes)
+        points = np.asarray([(ox + path.points[i][0] * sx, (ny - 1) - (oy + path.points[i][1] * sy)) for i in indexes], np.float32)
+        original_values = path.relief_values or tuple(path.importance for _ in path.points)
+        original_widths = path.width_values or tuple(1.0 for _ in path.points)
+        values = tuple(original_values[min(i, len(original_values) - 1)] for i in indexes)
+        widths = tuple(original_widths[min(i, len(original_widths) - 1)] for i in indexes)
         if state.uniform_height: values = tuple(1.0 for _ in path.points)
         for index in range(max(0, len(points) - 1)):
             value = (values[min(index, len(values) - 1)] + values[min(index + 1, len(values) - 1)]) / 2
@@ -121,22 +162,22 @@ def build_contour_mesh(result: ContourResult, settings: ContourMeshSettings) -> 
     relief_height = np.where(ridge > 0, state.minimum_contour_height + ridge * height_span, 0)
     top_z = state.base_thickness + relief_height.astype(np.float64)
     xs = np.linspace(0, total_w, nx); ys = np.linspace(0, total_h, ny)
-    vertices = [[x, y, top_z[j, i]] for j, y in enumerate(ys) for i, x in enumerate(xs)]
-    vertices += [[x, y, 0.0] for j, y in enumerate(ys) for i, x in enumerate(xs)]
-    faces: list[tuple[int, int, int]] = []; offset = nx * ny
-    for j in range(ny - 1):
-        for i in range(nx - 1):
-            a = j * nx + i; b = a + 1; d = (j + 1) * nx + i; c = d + 1
-            faces.extend(((a, b, c), (a, c, d), (offset + a, offset + c, offset + b), (offset + a, offset + d, offset + c)))
+    xx, yy = np.meshgrid(xs, ys)
+    top_vertices = np.column_stack((xx.ravel(), yy.ravel(), top_z.ravel()))
+    bottom_vertices = np.column_stack((xx.ravel(), yy.ravel(), np.zeros(nx * ny)))
+    vertices = np.vstack((top_vertices, bottom_vertices))
+    offset = nx * ny
+    cell_y, cell_x = np.mgrid[0:ny - 1, 0:nx - 1]; a = (cell_y * nx + cell_x).ravel(); b = a + 1; d = a + nx; c = d + 1
+    faces = np.vstack((np.column_stack((a, b, c)), np.column_stack((a, c, d)), np.column_stack((offset + a, offset + c, offset + b)), np.column_stack((offset + a, offset + d, offset + c))))
     boundary = list(range(nx)) + [j * nx + nx - 1 for j in range(1, ny)] + list(range((ny - 1) * nx + nx - 2, (ny - 1) * nx - 1, -1)) + [j * nx for j in range(ny - 2, 0, -1)]
-    for index, a in enumerate(boundary):
-        b = boundary[(index + 1) % len(boundary)]
-        faces.extend(((a, offset + b, b), (a, offset + a, offset + b)))
-    mesh = trimesh.Trimesh(np.asarray(vertices), np.asarray(faces), process=True)
+    boundary_array = np.asarray(boundary, dtype=np.int64); boundary_next = np.roll(boundary_array, -1)
+    side_faces = np.vstack((np.column_stack((boundary_array, offset + boundary_next, boundary_next)), np.column_stack((boundary_array, offset + boundary_array, offset + boundary_next))))
+    faces = np.vstack((faces, side_faces)).astype(np.int64, copy=False)
+    mesh = trimesh.Trimesh(vertices, faces, process=False)
     if not mesh.is_watertight: raise ValueError("Contour geometry could not produce a watertight mesh")
     used = relief_height[relief_height > 0]
     height_range = (float(used.min()), float(used.max())) if used.size else (0.0, 0.0)
-    return ContourMeshResult(mesh, total_w, total_h, True, height_range, relief_height.astype(np.float32))
+    return ContourMeshResult(mesh, total_w, total_h, True, height_range, relief_height.astype(np.float32), len(selected_paths), sampled_points, estimated_memory, tuple(warnings))
 
 
 def export_contour_stl(result: ContourResult, settings: ContourMeshSettings, path: str | Path) -> ContourMeshResult:

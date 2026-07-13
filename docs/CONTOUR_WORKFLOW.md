@@ -56,3 +56,23 @@ Base and Contour Relief materials and colours.
 
 The private golden family image is for local manual evaluation only. Never
 commit, package, fixture, or publish screenshots of it.
+
+## Stability and complexity budgets
+
+Issue #3 exposed four connected preview/mesh regressions. The source view is now
+part of the persistent preview row, and recalculation preserves the last valid
+2D/3D result. Display zoom/pan is mapped back through the visible image rectangle
+before brush coordinates reach the non-destructive source mask.
+
+Mesh generation applies explicit path, sampled-point, triangle, and estimated
+memory budgets before expensive allocation. Important paths are retained first;
+point sampling is bounded and reported. Requests exceeding the grid triangle or
+memory budget fail safely with corrective guidance. Reusable ImageAnalysis and
+Contour results are passed to workers so relief-only work does not rerun earlier
+stages.
+
+The software viewer copies a compact immutable rendering buffer when a mesh is
+accepted. Orbit, pan, zoom, projection, wireframe, and reset operate only on the
+camera; they never query mutable trimesh caches or change export geometry.
+Recoverable worker/viewer exceptions and stage metrics are written without image
+content to `%LOCALAPPDATA%\ReCraft\recraft.log`.

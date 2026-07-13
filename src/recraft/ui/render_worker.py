@@ -13,6 +13,9 @@ from recraft.styles.base import ArtStyle, ParameterValue
 from recraft.engine.user_importance import UserImportanceState
 from recraft.engine.user_importance import render_source_mask
 from recraft.styles.contour_geometry import contour_height_image, contour_importance_image, render_contours
+from recraft.engine.analysis_result import ImageAnalysis
+from recraft.engine.user_importance import apply_user_importance
+from recraft.core.diagnostics import get_diagnostic_logger
 
 
 class RenderWorker(QObject):
@@ -34,6 +37,7 @@ class RenderWorker(QObject):
         export_path: str | None = None,
         debug_view: str | None = None,
         user_importance: UserImportanceState | None = None,
+        cached_analysis: ImageAnalysis | None = None,
     ) -> None:
         super().__init__()
         self._source = source.copy()
@@ -43,6 +47,7 @@ class RenderWorker(QObject):
         self._export_path = export_path
         self._debug_view = debug_view
         self._user_importance = user_importance
+        self._cached_analysis = cached_analysis
 
     @Slot()
     def run(self) -> None:
@@ -50,7 +55,7 @@ class RenderWorker(QObject):
         try:
             if self._export_path is None:
                 if self._debug_view:
-                    analysis = analyse_prepared_preview(self._source, self._settings, user_importance=self._user_importance)
+                    analysis = apply_user_importance(self._cached_analysis, self._user_importance, self._settings) if self._cached_analysis is not None else analyse_prepared_preview(self._source, self._settings, user_importance=self._user_importance)
                     self.analysis_ready.emit(analysis)
                     if self._debug_view in ("Raw Contour Paths", "Filtered Contour Paths", "Contour Importance View", "Contour Height View"):
                         generator = getattr(self._style, "generate", None)
@@ -73,7 +78,7 @@ class RenderWorker(QObject):
                         result = analysis.debug_image(self._debug_view)
                 else:
                     if getattr(self._style, "identifier", "") == "contour":
-                        analysis = analyse_prepared_preview(self._source, self._settings, user_importance=self._user_importance)
+                        analysis = apply_user_importance(self._cached_analysis, self._user_importance, self._settings) if self._cached_analysis is not None else analyse_prepared_preview(self._source, self._settings, user_importance=self._user_importance)
                         self.analysis_ready.emit(analysis)
                         contours = self._style.generate(analysis, self._parameters)
                         self.geometry_ready.emit(contours)
@@ -92,6 +97,7 @@ class RenderWorker(QObject):
                     str(Path(self._export_path)), result.width, result.height
                 )
         except Exception as exc:  # worker boundary must return errors to the UI
+            get_diagnostic_logger().exception("Recoverable render failure style=%s output=%s", getattr(self._style, "identifier", "unknown"), (self._settings.output_width, self._settings.output_height))
             self.failed.emit(f"{type(exc).__name__}: {exc}")
         finally:
             self.finished.emit()

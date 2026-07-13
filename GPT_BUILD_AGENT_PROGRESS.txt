@@ -536,3 +536,44 @@ Validation/build result for this change:
   arbitrary language/semantic model; the software 3D viewer samples faces only
   for display performance but never substitutes or changes exported geometry;
   Bambu Studio was not automated, so 3MF structure is validated programmatically.
+
+
+ISSUE #3 — CONTOUR WORKSPACE STABILITY — 13 JULY 2026
+
+Root causes found and resolved on feature/contour-workflow-relief:
+
+- The prepared-image layout existed but was never inserted into the visible
+  preview row. It is now persistently visible beside 2D Contour and 3D relief.
+- Focus/brush invalidation called a method that explicitly cleared the valid 2D
+  result. Derived state is now marked stale while the last valid previews remain.
+- Detailed could produce more than 12,000 paths and 300,000 path points without
+  a resource boundary. Mesh work now has safe path, point, triangle (250,000),
+  and estimated-memory (256 MiB) budgets with useful recoverable errors.
+- Camera painting repeatedly accessed trimesh vertices, faces, normals and lazy
+  caches from the Qt paint callback. MeshView now owns compact immutable render
+  buffers; camera actions cannot mutate or regenerate mesh geometry.
+- Standard relief work could repeat ImageAnalysis/Contour work. Workers now reuse
+  the cached analysis or contour result and record cache hits in stage metrics.
+- Recoverable worker and painter exceptions include tracebacks in the local log:
+  %LOCALAPPDATA%\ReCraft\recraft.log. No image pixels or private filenames are
+  deliberately written to diagnostics.
+
+Synthetic 1200×800 timing fixture, before/after reference:
+
+- Standard: analysis 0.44 s + contours 1.32 s + mesh 0.52 s before. With cached
+  analysis/contours, relief-only work avoids the first 1.76 s; measured mesh was
+  0.51 s, 4,678 paths, 45,194 points, 34,880 vertices, 69,756 faces, 2.8 MiB.
+- Detailed: analysis 0.45 s + contours 2.72 s + mesh 3.29 s before. After:
+  cached analysis 0.40 s initial-only, contours 2.73 s, mesh 3.20 s; 12,967 input
+  paths bounded to 12,000, 289,516 sampled points, 71,760 vertices, 143,516
+  faces, 5.7 MiB. A clear warning records the path-budget reduction.
+
+Validation at this checkpoint: 85 automated tests passed. New tests cover source
+visibility, brush mapping through display pan/zoom, preview preservation, bounded
+Detailed geometry, safe excessive-complexity failure, cache reuse, repeated
+camera interactions, immutable renderer buffers, and mesh lifetime ownership.
+
+The final tests-first Windows release build passed and overwrote:
+
+- dist/ReCraft/ReCraft.exe — 10,718,937 bytes
+- dist/ReCraft-Setup.exe — 95,345,279 bytes

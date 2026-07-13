@@ -38,6 +38,7 @@ from recraft.engine.focus_features import FocusAction, interpret_focus_descripti
 from recraft.ui.mesh_view import MeshView
 from recraft.ui.collapsible import CollapsibleSection
 from recraft.styles.contour_geometry import contour_height_image
+from recraft.core.diagnostics import PipelineMetrics, diagnostic_log_path
 
 
 class MainWindow(QMainWindow):
@@ -183,7 +184,7 @@ class MainWindow(QMainWindow):
         self.projection_combo = QComboBox(); self.projection_combo.addItems(("perspective", "orthographic")); self.projection_combo.currentTextChanged.connect(self.mesh_view.set_projection); mesh_toolbar.addWidget(self.projection_combo)
         self.wireframe_check = QCheckBox("Edges"); self.wireframe_check.toggled.connect(lambda checked: (setattr(self.mesh_view, "wireframe", checked), self.mesh_view.update())); mesh_toolbar.addWidget(self.wireframe_check)
         relief.addLayout(mesh_toolbar); relief.addWidget(self.mesh_view)
-        panels.addLayout(right); panels.addLayout(relief); preview_root.addLayout(panels, 1)
+        panels.addLayout(left, 1); panels.addLayout(right, 1); panels.addLayout(relief, 1); preview_root.addLayout(panels, 1)
         material_row = QHBoxLayout(); self.base_colour_button = QPushButton(); self.contour_colour_button = QPushButton(); self.reset_colours_button = QPushButton("Reset colours")
         self.base_colour_button.clicked.connect(lambda: self._choose_colour("base")); self.contour_colour_button.clicked.connect(lambda: self._choose_colour("contour")); self.reset_colours_button.clicked.connect(self._reset_colours)
         material_row.addWidget(QLabel("Base Colour")); material_row.addWidget(self.base_colour_button); material_row.addWidget(QLabel("Contour Colour")); material_row.addWidget(self.contour_colour_button); material_row.addWidget(self.reset_colours_button)
@@ -271,14 +272,15 @@ class MainWindow(QMainWindow):
             self.user_importance.user_strength = self.user_strength.value()
             self.user_importance.background_suppression = self.background_strength.value()
             self.transform_settings = self.transform_settings.reset(self.source_image.size)
-            self._sync_setup_controls(); self._refresh_prepared(); self._invalidate_output()
+            self.current_analysis = None
+            self._sync_setup_controls(); self._refresh_prepared(); self._invalidate_output(clear=True)
             self.statusBar().showMessage(f"Loaded {Path(filename).name} at {self.source_image.width} × {self.source_image.height}")
             self._generate()
         except ImageLoadError as exc: QMessageBox.critical(self, "Could not open image", str(exc))
 
     def _setup_changed(self) -> None:
         if self._updating_setup: return
-        try: self.transform_settings = self._settings_from_controls(); self.workflow_state.invalidate_preparation(); self.cached_contour_result = self.cached_mesh_result = None; self._refresh_prepared(); self._invalidate_output()
+        try: self.transform_settings = self._settings_from_controls(); self.workflow_state.invalidate_preparation(); self.current_analysis = None; self.cached_contour_result = self.cached_mesh_result = None; self._refresh_prepared(); self._invalidate_output()
         except ValueError as exc: QMessageBox.warning(self, "Invalid image setup", str(exc))
 
     def _dimensions_changed(self) -> None:
@@ -302,16 +304,16 @@ class MainWindow(QMainWindow):
         self._updating_setup = True; self.width_spin.setValue(width); self.height_spin.setValue(min(height, MAX_OUTPUT_DIMENSION)); self._updating_setup = False; self._setup_changed()
 
     def _rotate(self, turns: int) -> None:
-        self.transform_settings = replace(self._settings_from_controls(), rotation_quarters=self.transform_settings.rotation_quarters + turns); self.workflow_state.invalidate_preparation(); self.cached_contour_result = self.cached_mesh_result = None; self._refresh_prepared(); self._invalidate_output()
+        self.transform_settings = replace(self._settings_from_controls(), rotation_quarters=self.transform_settings.rotation_quarters + turns); self.workflow_state.invalidate_preparation(); self.current_analysis = None; self.cached_contour_result = self.cached_mesh_result = None; self._refresh_prepared(); self._invalidate_output()
 
     def _flip_horizontal(self) -> None:
-        self.transform_settings = replace(self._settings_from_controls(), flip_horizontal=not self.transform_settings.flip_horizontal); self.workflow_state.invalidate_preparation(); self.cached_contour_result = self.cached_mesh_result = None; self._refresh_prepared(); self._invalidate_output()
+        self.transform_settings = replace(self._settings_from_controls(), flip_horizontal=not self.transform_settings.flip_horizontal); self.workflow_state.invalidate_preparation(); self.current_analysis = None; self.cached_contour_result = self.cached_mesh_result = None; self._refresh_prepared(); self._invalidate_output()
 
     def _flip_vertical(self) -> None:
-        self.transform_settings = replace(self._settings_from_controls(), flip_vertical=not self.transform_settings.flip_vertical); self.workflow_state.invalidate_preparation(); self.cached_contour_result = self.cached_mesh_result = None; self._refresh_prepared(); self._invalidate_output()
+        self.transform_settings = replace(self._settings_from_controls(), flip_vertical=not self.transform_settings.flip_vertical); self.workflow_state.invalidate_preparation(); self.current_analysis = None; self.cached_contour_result = self.cached_mesh_result = None; self._refresh_prepared(); self._invalidate_output()
 
     def _reset_setup(self) -> None:
-        self.transform_settings = self.transform_settings.reset(self.source_image.size if self.source_image else None); self.workflow_state.invalidate_preparation(); self.cached_contour_result = self.cached_mesh_result = None; self._sync_setup_controls(); self._refresh_prepared(); self._invalidate_output()
+        self.transform_settings = self.transform_settings.reset(self.source_image.size if self.source_image else None); self.workflow_state.invalidate_preparation(); self.current_analysis = None; self.cached_contour_result = self.cached_mesh_result = None; self._sync_setup_controls(); self._refresh_prepared(); self._invalidate_output()
 
     def _gesture_zoom(self, delta: float) -> None:
         self.zoom_spin.setValue(max(1.0, min(10.0, self.zoom_spin.value() + delta)))
@@ -338,8 +340,12 @@ class MainWindow(QMainWindow):
             display = Image.fromarray(np.clip(pixels * (1 - alpha) + overlay * alpha, 0, 255).astype(np.uint8), "RGB")
         self.prepared_view.set_image(display)
 
-    def _invalidate_output(self) -> None:
-        self.output_image = None; self.output_view.set_image(None); self.save_button.setEnabled(self.source_image is not None)
+    def _invalidate_output(self, clear: bool = False) -> None:
+        """Mark derived output stale while preserving the last valid previews."""
+        if clear:
+            self.output_image = None; self.output_view.set_image(None)
+            self.cached_mesh_result = None; self.mesh_view.set_mesh(None)
+        self.save_button.setEnabled(self.source_image is not None)
 
     def _generate(self) -> None:
         if self.source_image is None: QMessageBox.information(self, "No image", "Open an image before generating artwork."); return
@@ -373,6 +379,7 @@ class MainWindow(QMainWindow):
             export_path,
             None if export_path else self.debug_combo.currentData(),
             copy.deepcopy(self.user_importance),
+            self.current_analysis,
         )
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
@@ -420,8 +427,8 @@ class MainWindow(QMainWindow):
         )
 
     def _render_failed(self, message: str) -> None:
-        QMessageBox.critical(self, "Rendering failed", message)
-        self.statusBar().showMessage("Rendering failed")
+        QMessageBox.critical(self, "Rendering failed safely", f"{message}\n\nThe previous valid preview has been preserved. Diagnostic log:\n{diagnostic_log_path()}")
+        self.statusBar().showMessage("Rendering failed safely — previous preview preserved")
 
     def _render_cleanup(self) -> None:
         self._render_thread = None
@@ -534,11 +541,11 @@ class MainWindow(QMainWindow):
             settings = replace(settings, resolution=max(40, round(settings.resolution * quality.mesh_resolution_scale)))
         thread = QThread(self); worker = MeshWorker(
             self.source_image, self._settings_from_controls(), copy.deepcopy(self.user_importance), self._style_parameters(),
-            settings, path, self.workflow_state.colours, export_format, self.cached_contour_result,
+            settings, path, self.workflow_state.colours, export_format, self.cached_contour_result, self.current_analysis, self.preset_state.selected.value,
         )
         worker.moveToThread(thread); thread.started.connect(worker.run); worker.exported.connect(self._mesh_exported)
         worker.geometry_ready.connect(self._contour_geometry_ready); worker.mesh_ready.connect(self._mesh_geometry_ready)
-        worker.failed.connect(self._render_failed); worker.finished.connect(thread.quit); worker.finished.connect(worker.deleteLater); thread.finished.connect(self._render_cleanup); thread.finished.connect(thread.deleteLater)
+        worker.metrics_ready.connect(self._mesh_metrics_ready); worker.failed.connect(self._render_failed); worker.finished.connect(thread.quit); worker.finished.connect(worker.deleteLater); thread.finished.connect(self._render_cleanup); thread.finished.connect(thread.deleteLater)
         self._render_thread = thread; self._render_worker = worker; self._set_rendering(True); self.statusBar().showMessage("Building variable-height Contour relief…"); thread.start()
 
     def _mesh_exported(self, path: str, width: float, height: float, vertices: int, faces: int, watertight: bool) -> None:
@@ -556,6 +563,12 @@ class MainWindow(QMainWindow):
         profile = self.print_profile.customised(nozzle_diameter=self.nozzle_spin.value(), layer_height=self.layer_spin.value())
         warnings = validate_printability(profile, minimum_width=self.minimum_feature.value(), height_range=result.ridge_height_range, base_thickness=self.base_thickness.value(), mesh_resolution=self.mesh_resolution.value(), triangle_count=len(result.mesh.faces), physical_width=self.mesh_width.value())
         self.print_warnings.setText("No printability warnings." if not warnings else "\n".join(f"• {warning}" for warning in warnings))
+
+    def _mesh_metrics_ready(self, metrics: PipelineMetrics) -> None:
+        """Show stage timings and bounded-geometry diagnostics."""
+        timings = ", ".join(f"{name} {seconds:.2f}s" for name, seconds in metrics.stage_seconds.items())
+        self.mesh_summary.setText(self.mesh_summary.text() + f" | {timings} | estimated memory {metrics.estimated_mesh_memory_mb:.1f} MB")
+        if metrics.warnings: self.print_warnings.setText("\n".join(f"• {warning}" for warning in metrics.warnings))
 
     def _contour_geometry_ready(self, result: object) -> None:
         self.cached_contour_result = result; self.workflow_state.contour_valid = True; self.workflow_state.analysis_valid = True
@@ -603,8 +616,11 @@ class MainWindow(QMainWindow):
 
     def _analysis_finished(self, analysis: object) -> None:
         """Present editable, deliberately uncertain findings from Image DNA."""
+        prior_actions = {feature.identifier: feature.action for feature in self.focus_features}
         self.current_analysis = analysis
         self.focus_features = suggest_focus_features(analysis)
+        for feature in self.focus_features:
+            feature.action = prior_actions.get(feature.identifier, feature.action)
         self._rebuild_focus_cards()
         faces = len(getattr(analysis, "face_rectangles", ()))
         parts = ["ReCraft found a likely central subject and candidate silhouette"]
