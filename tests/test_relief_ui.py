@@ -5,10 +5,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PIL import Image
 from PySide6.QtWidgets import QApplication
+import numpy as np
 import pytest
 
+from recraft.relief.mesh import build_relief_mesh
 from recraft.relief.presets import ReliefSettings, ReliefStyle
 from recraft.ui.main_window import MainWindow
+from recraft.ui.mesh_view import MAX_RENDER_FACES, MeshView, build_coherent_render_surface
 from recraft.ui.relief_worker import ReliefWorker
 
 
@@ -49,6 +52,27 @@ def test_worker_accepts_style_value_from_qt_combo_box() -> None:
     worker.failed.connect(errors.append)
     worker.run()
     assert not errors and results
+
+
+def test_mesh_preview_is_a_coherent_complete_surface(app: QApplication) -> None:
+    values = np.zeros((112, 150), np.float32)
+    values[:, :40] = 1
+    result = build_relief_mesh(values, ReliefSettings(), preview=True)
+    vertices, faces = build_coherent_render_surface(result)
+    assert len(faces) <= MAX_RENDER_FACES
+    assert vertices[:, 0].min() == pytest.approx(0)
+    assert vertices[:, 0].max() == pytest.approx(result.width_mm)
+    assert vertices[:, 1].min() == pytest.approx(0)
+    assert vertices[:, 1].max() == pytest.approx(result.height_mm)
+    top = vertices[vertices[:, 2] > 0]
+    assert top[top[:, 0] < 40, 2].mean() > top[top[:, 0] > 120, 2].mean()
+    assert len(np.unique(faces)) == len(vertices)
+
+    view = MeshView()
+    view.resize(640, 480)
+    view.set_mesh(result)
+    assert len(view._faces) == len(faces)
+    assert view._raised.all()
 
 
 def test_failure_state_preserves_last_valid_result(app: QApplication, monkeypatch: pytest.MonkeyPatch) -> None:

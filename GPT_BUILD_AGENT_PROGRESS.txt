@@ -664,3 +664,31 @@ Runtime-fix validation and replacement build:
 - 87 automated tests passed, including the tests-first release build.
 - dist/ReCraft/ReCraft.exe — 10,671,632 bytes.
 - dist/ReCraft-Setup.exe — 95,311,536 bytes.
+
+PREVIEW/EXPORT MISMATCH FIX — 14 JULY 2026
+
+Manual comparison with Bambu Studio showed that the ReCraft viewer displayed a
+sparse dotted triangle lattice while the exported STL was a continuous relief.
+The exporter was correct. MeshView had achieved its display budget by taking
+every Nth face from the complete mesh, leaving unrelated isolated triangles and
+therefore materially misrepresenting the export.
+
+MeshView now builds a coherent bounded display plaque from complete sampled rows
+and columns of the exact exported relief map. It preserves the entire outline,
+left/right orientation, relative height field, and side walls while
+remaining below a 6,000-face interactive budget. Neutral solid shading replaces
+the misleading black/gold dotted appearance. A regression test verifies full
+physical bounds, orientation, continuous vertex use, and the face budget.
+
+The flat rear remains present in STL/3MF but is omitted from the software view:
+QPainter has no depth buffer, so two rear-spanning triangles can incorrectly
+paint over the front when orbiting. Omitting this hidden surface makes the
+front preview truthful without changing export geometry.
+
+Preview-fix validation and replacement build:
+
+- 88 automated tests passed, including the tests-first release build.
+- Visual QA confirmed a filled coherent surface without dotted holes or rear
+  triangles obscuring the front.
+- dist/ReCraft/ReCraft.exe — 10,674,585 bytes.
+- dist/ReCraft-Setup.exe — 95,311,255 bytes.
