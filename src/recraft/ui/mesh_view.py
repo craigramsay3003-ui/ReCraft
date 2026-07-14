@@ -2,7 +2,7 @@
 
 import numpy as np
 from PySide6.QtCore import QPoint, QPointF, Qt, Signal
-from PySide6.QtGui import QColor, QMouseEvent, QPainter, QPen, QPolygonF, QWheelEvent
+from PySide6.QtGui import QColor, QImage, QMouseEvent, QPainter, QPen, QPolygonF, QTransform, QWheelEvent
 from PySide6.QtWidgets import QWidget
 
 from recraft.core.mesh_camera import MeshCamera, ProjectionMode
@@ -94,6 +94,36 @@ def build_coherent_render_surface(
     return vertices, faces
 
 
+def relief_shading_texture(relief_map: np.ndarray) -> QImage:
+    """Render full height-map detail as a smooth neutral lighting texture."""
+    field = np.flipud(np.asarray(relief_map, np.float32))
+    low, high = float(field.min()), float(field.max())
+    if high - low < 1e-8:
+        normalized = np.zeros_like(field)
+    else:
+        normalized = np.clip((field - low) / (high - low), 0, 1)
+    gradient_y, gradient_x = np.gradient(normalized)
+    normal_x = -gradient_x * 3.5
+    normal_y = -gradient_y * 3.5
+    normal_z = np.ones_like(normal_x)
+    length = np.sqrt(normal_x**2 + normal_y**2 + normal_z**2)
+    directional = np.clip(
+        (normal_x * -.35 + normal_y * -.25 + normal_z * .90) / length,
+        0,
+        1,
+    )
+    shade = np.clip(.18 + .42 * normalized + .40 * directional, 0, 1)
+    grey = np.asarray(45 + shade * 190, np.uint8)
+    rgb = np.ascontiguousarray(np.repeat(grey[..., None], 3, axis=2))
+    return QImage(
+        rgb.data,
+        rgb.shape[1],
+        rgb.shape[0],
+        rgb.strides[0],
+        QImage.Format.Format_RGB888,
+    ).copy()
+
+
 class MeshView(QWidget):
     """Orbitable viewer that never changes or regenerates export geometry."""
 
@@ -101,14 +131,14 @@ class MeshView(QWidget):
 
     def __init__(self) -> None:
         super().__init__(); self.camera = MeshCamera(); self.result: ContourMeshResult | None = None; self.colours = ReliefColours("#7D848D", "#B9BEC5"); self.wireframe = False; self._last: QPoint | None = None; self._panning = False
-        self._vertices = np.empty((0, 3), np.float64); self._faces = np.empty((0, 3), np.int64); self._normals = np.empty((0, 3), np.float64); self._raised = np.empty(0, bool); self._height_tone = np.empty(0, np.float64); self._render_error: str | None = None
+        self._vertices = np.empty((0, 3), np.float64); self._faces = np.empty((0, 3), np.int64); self._normals = np.empty((0, 3), np.float64); self._raised = np.empty(0, bool); self._height_tone = np.empty(0, np.float64); self._relief_texture: QImage | None = None; self._texture_corners = np.empty((0, 3), np.float64); self._render_error: str | None = None
         self.setMinimumSize(300, 240); self.setMouseTracking(True); self.setStyleSheet("background:#15181D")
 
     def set_mesh(self, result: ContourMeshResult | None, colours: ReliefColours | None = None) -> None:
         """Display the exact mesh used by STL/3MF export."""
         self.result = result; self.colours = colours or self.colours; self._render_error = None
         if result is None:
-            self._vertices = np.empty((0, 3)); self._faces = np.empty((0, 3), np.int64); self._normals = np.empty((0, 3)); self._raised = np.empty(0, bool); self._height_tone = np.empty(0)
+            self._vertices = np.empty((0, 3)); self._faces = np.empty((0, 3), np.int64); self._normals = np.empty((0, 3)); self._raised = np.empty(0, bool); self._height_tone = np.empty(0); self._relief_texture = None; self._texture_corners = np.empty((0, 3))
         else:
             # Copy compact immutable render buffers once. Camera movement never
             # reaches into trimesh caches or mutates export geometry.
@@ -125,7 +155,25 @@ class MeshView(QWidget):
             face_height = self._vertices[self._faces, 2].mean(axis=1)
             height_span = max(float(face_height.max() - face_height.min()), 1e-12)
             self._height_tone = (face_height - face_height.min()) / height_span
-            for array in (self._vertices, self._faces, self._normals, self._raised, self._height_tone): array.flags.writeable = False
+            self._relief_texture = relief_shading_texture(result.relief_map)
+            field = np.asarray(result.relief_map, np.float64)
+            relief_low, relief_high = result.ridge_height_range
+            field_low, field_high = float(field.min()), float(field.max())
+            if field_high - field_low < 1e-12:
+                physical_relief = np.full_like(field, relief_low)
+            else:
+                physical_relief = relief_low + (field - field_low) / (field_high - field_low) * (relief_high - relief_low)
+            base_top = float(result.mesh.bounds[1, 2]) - relief_high
+            self._texture_corners = np.array(
+                [
+                    [0, result.height_mm, base_top + physical_relief[-1, 0]],
+                    [result.width_mm, result.height_mm, base_top + physical_relief[-1, -1]],
+                    [result.width_mm, 0, base_top + physical_relief[0, -1]],
+                    [0, 0, base_top + physical_relief[0, 0]],
+                ],
+                np.float64,
+            )
+            for array in (self._vertices, self._faces, self._normals, self._raised, self._height_tone, self._texture_corners): array.flags.writeable = False
         self.update()
 
     def set_colours(self, colours: ReliefColours) -> None:
@@ -172,6 +220,23 @@ class MeshView(QWidget):
                 light = abs(float(normal @ np.array([.3, -.4, .86])))
                 shade = max(.35, min(1.0, .30 + .25 * light + .45 * self._height_tone[face_index])); colour = colour.darker(round(100 / shade))
                 polygon = QPolygonF([QPointF(*points[vertex]) for vertex in face]); painter.setBrush(colour); painter.setPen(QPen(QColor("#111318") if self.wireframe else colour, 1)); painter.drawPolygon(polygon)
+            if self._relief_texture is not None and self.camera.pitch >= 0:
+                corners, _ = self.camera.project(self._texture_corners, (self.width(), self.height()))
+                source = QPolygonF(
+                    [
+                        QPointF(0, 0),
+                        QPointF(self._relief_texture.width(), 0),
+                        QPointF(self._relief_texture.width(), self._relief_texture.height()),
+                        QPointF(0, self._relief_texture.height()),
+                    ]
+                )
+                destination = QPolygonF([QPointF(*point) for point in corners])
+                transform = QTransform.quadToQuad(source, destination)
+                painter.save()
+                painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+                painter.setTransform(transform)
+                painter.drawImage(QPointF(0, 0), self._relief_texture)
+                painter.restore()
         except Exception as exc:  # Qt paint callbacks must never terminate the process
             self._render_error = f"{type(exc).__name__}: {exc}"; get_diagnostic_logger().exception("Recoverable mesh viewer paint failure")
             painter.setPen(QColor("#F28B82")); painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "3D preview could not be drawn. Export geometry remains intact.")

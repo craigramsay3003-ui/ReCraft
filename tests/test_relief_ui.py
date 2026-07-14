@@ -11,7 +11,7 @@ import pytest
 from recraft.relief.mesh import build_relief_mesh
 from recraft.relief.presets import ReliefSettings, ReliefStyle
 from recraft.ui.main_window import MainWindow
-from recraft.ui.mesh_view import MAX_RENDER_FACES, MeshView, build_coherent_render_surface
+from recraft.ui.mesh_view import MAX_RENDER_FACES, MeshView, build_coherent_render_surface, relief_shading_texture
 from recraft.ui.relief_worker import ReliefWorker
 
 
@@ -73,6 +73,18 @@ def test_mesh_preview_is_a_coherent_complete_surface(app: QApplication) -> None:
     view.set_mesh(result)
     assert len(view._faces) == len(faces)
     assert view._raised.all()
+    assert view._relief_texture is not None
+    assert view._relief_texture.size().width() == values.shape[1]
+    assert view._relief_texture.size().height() == values.shape[0]
+
+
+def test_full_height_map_texture_retains_detail() -> None:
+    values = np.zeros((190, 152), np.float32)
+    values[45:48, 70:73] = 1
+    texture = relief_shading_texture(values)
+    assert texture.width() == 152 and texture.height() == 190
+    pixels = np.frombuffer(texture.bits(), dtype=np.uint8).reshape(190, texture.bytesPerLine())
+    assert np.ptp(pixels) > 80
 
 
 def test_failure_state_preserves_last_valid_result(app: QApplication, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -692,3 +692,25 @@ Preview-fix validation and replacement build:
   triangles obscuring the front.
 - dist/ReCraft/ReCraft.exe — 10,674,585 bytes.
 - dist/ReCraft-Setup.exe — 95,311,255 bytes.
+
+FULL-DETAIL PREVIEW SHADING — 14 JULY 2026
+
+The user confirmed orbit, pan, and zoom were responsive after coherent geometry,
+but the photographic structure remained blocky. The log proved Fine preview had
+a 152x190 height map and 115,516-triangle watertight mesh; the remaining loss was
+the sub-6,000-face flat-shaded display grid, not analysis or export.
+
+The viewer retains that fast geometry for navigation and side-wall silhouette,
+then shades the surface with a projectively mapped raster calculated from every
+sample in the full relief map. Height and local gradient drive neutral lighting,
+so fine exported structure remains visible without asking QPainter to move over
+100,000 polygons on each camera event. Camera movement still never regenerates
+analysis, relief, or export geometry.
+
+Full-detail shading validation and replacement build:
+
+- 89 automated tests passed, including the tests-first release build.
+- Visual QA confirmed detailed height and gradient texture remains visible on
+  the coherent orbitable plaque.
+- dist/ReCraft/ReCraft.exe — 10,676,961 bytes.
+- dist/ReCraft-Setup.exe — 95,304,922 bytes.
