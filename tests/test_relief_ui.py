@@ -40,6 +40,17 @@ def test_worker_generates_reliable_preview_and_reports_progress() -> None:
     assert not errors and results and results[0].watertight and len(stages) >= 3
 
 
+def test_worker_accepts_style_value_from_qt_combo_box() -> None:
+    image = Image.new("RGB", (120, 90), "#777777")
+    errors: list[str] = []
+    results: list[object] = []
+    worker = ReliefWorker(image, ReliefSettings(style="Portrait Relief", preview_resolution=80))
+    worker.preview_ready.connect(lambda image, heights, result: results.append(result))
+    worker.failed.connect(errors.append)
+    worker.run()
+    assert not errors and results
+
+
 def test_failure_state_preserves_last_valid_result(app: QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("recraft.ui.main_window.QMessageBox.critical", lambda *args, **kwargs: None)
     window = MainWindow(); marker = object(); window.relief_result = marker; window.preview_up_to_date = True

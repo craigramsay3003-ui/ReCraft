@@ -1,6 +1,6 @@
 """Central physical-output presets for the simplified ReCraft workflow."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 
 
@@ -38,7 +38,7 @@ RELIEF_PRESETS = {
 class ReliefSettings:
     """Small validated configuration shared by preview and export."""
 
-    style: ReliefStyle = ReliefStyle.PORTRAIT
+    style: ReliefStyle | str = ReliefStyle.PORTRAIT
     physical_width_mm: float = 160.0
     relief_depth_mm: float = 1.8
     base_thickness_mm: float = 1.5
@@ -54,6 +54,10 @@ class ReliefSettings:
 
     def validated(self) -> "ReliefSettings":
         """Reject unsafe physical and memory-heavy combinations."""
+        try:
+            style = ReliefStyle(self.style)
+        except ValueError as exc:
+            raise ValueError(f"Unknown relief style: {self.style}") from exc
         if not 40 <= self.physical_width_mm <= 500: raise ValueError("Physical width must be between 40 and 500 mm")
         if not .5 <= self.relief_depth_mm <= 5: raise ValueError("Relief depth must be between 0.5 and 5 mm")
         if not .8 <= self.base_thickness_mm <= 8: raise ValueError("Base thickness must be between 0.8 and 8 mm")
@@ -64,4 +68,4 @@ class ReliefSettings:
         if not 64 <= self.preview_resolution <= 220: raise ValueError("Preview quality must be between 64 and 220 samples")
         if not 120 <= self.export_resolution <= 360: raise ValueError("Export quality must be between 120 and 360 samples")
         if self.relief_depth_mm < self.layer_height_mm * 3: raise ValueError("Relief depth should span at least three printable layers")
-        return self
+        return self if self.style is style else replace(self, style=style)

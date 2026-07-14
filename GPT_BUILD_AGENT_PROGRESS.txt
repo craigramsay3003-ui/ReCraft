@@ -645,3 +645,22 @@ Final validation and packaging:
 - dist/ReCraft-Setup.exe — 95,301,864 bytes.
 - Bambu Studio import/slicing and the private golden-image assessment remain
   intentionally unclaimed; Craig will perform them manually tomorrow.
+
+RUNTIME FIX — 14 JULY 2026
+
+Manual source-app testing exposed repeated AttributeError tracebacks after a
+successful generation. PySide returned the selected str-based enum value as a
+plain string; ReliefSettings previously validated numeric fields but did not
+normalize this UI boundary. The worker then accessed style.value in success
+logging, and its exception logger repeated the same invalid access.
+
+ReliefSettings.validated now converts either an enum or UI string to a canonical
+ReliefStyle and rejects unknown names with a useful validation error. Regression
+tests cover direct string normalization and a complete worker render using the
+same string value emitted by the Qt combo box.
+
+Runtime-fix validation and replacement build:
+
+- 87 automated tests passed, including the tests-first release build.
+- dist/ReCraft/ReCraft.exe — 10,671,632 bytes.
+- dist/ReCraft-Setup.exe — 95,311,536 bytes.

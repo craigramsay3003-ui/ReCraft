@@ -28,6 +28,13 @@ def test_dark_to_light_mapping_and_normal_invert() -> None:
     assert 0 <= normal.min() <= normal.max() <= 1
 
 
+def test_ui_style_string_is_normalized_to_enum() -> None:
+    settings = ReliefSettings(style="Graphic Relief").validated()
+    assert settings.style is ReliefStyle.GRAPHIC
+    with pytest.raises(ValueError, match="Unknown relief style"):
+        ReliefSettings(style="Missing Relief").validated()
+
+
 def test_spike_smoothing_and_flat_area_cleanup() -> None:
     spike = np.zeros((31, 31), np.float32); spike[15, 15] = 1
     smooth = suppress_isolated_spikes(spike)
