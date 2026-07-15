@@ -124,6 +124,38 @@ def relief_shading_texture(relief_map: np.ndarray) -> QImage:
     ).copy()
 
 
+def rgb_surface_texture(pixels: np.ndarray) -> QImage:
+    """Copy an aligned RGB colour map into immutable Qt-owned storage."""
+    rgb = np.ascontiguousarray(np.asarray(pixels, np.uint8))
+    if rgb.ndim != 3 or rgb.shape[2] != 3:
+        raise ValueError("Surface colour texture must be an RGB array")
+    return QImage(
+        rgb.data,
+        rgb.shape[1],
+        rgb.shape[0],
+        rgb.strides[0],
+        QImage.Format.Format_RGB888,
+    ).copy()
+
+
+def colour_relief_texture(pixels: np.ndarray, relief_map: np.ndarray) -> QImage:
+    """Apply restrained matte relief lighting without moving aligned colour."""
+    rgb = np.asarray(pixels, np.float32)
+    # ReliefMesh stores row zero at physical Y=0 (image bottom), while an image
+    # texture stores row zero at its visual top.
+    field = np.flipud(np.asarray(relief_map, np.float32))
+    if rgb.shape[:2] != field.shape:
+        raise ValueError("Colour texture and relief map must have identical dimensions")
+    low, high = float(field.min()), float(field.max())
+    normalized = np.zeros_like(field) if high - low < 1e-8 else np.clip((field - low) / (high - low), 0, 1)
+    gradient_y, gradient_x = np.gradient(normalized)
+    normal_x, normal_y, normal_z = -gradient_x * 2.5, -gradient_y * 2.5, np.ones_like(field)
+    length = np.sqrt(normal_x**2 + normal_y**2 + normal_z**2)
+    directional = np.clip((normal_x * -.30 + normal_y * -.22 + normal_z * .93) / length, 0, 1)
+    light = np.clip(.62 + .24 * directional + .14 * normalized, .55, 1.0)
+    return rgb_surface_texture(np.clip(rgb * light[..., None], 0, 255).astype(np.uint8))
+
+
 class MeshView(QWidget):
     """Orbitable viewer that never changes or regenerates export geometry."""
 
@@ -134,7 +166,7 @@ class MeshView(QWidget):
         self._vertices = np.empty((0, 3), np.float64); self._faces = np.empty((0, 3), np.int64); self._normals = np.empty((0, 3), np.float64); self._raised = np.empty(0, bool); self._height_tone = np.empty(0, np.float64); self._relief_texture: QImage | None = None; self._texture_corners = np.empty((0, 3), np.float64); self._render_error: str | None = None
         self.setMinimumSize(300, 240); self.setMouseTracking(True); self.setStyleSheet("background:#15181D")
 
-    def set_mesh(self, result: ContourMeshResult | None, colours: ReliefColours | None = None) -> None:
+    def set_mesh(self, result: ContourMeshResult | None, colours: ReliefColours | None = None, surface_pixels: np.ndarray | None = None) -> None:
         """Display the exact mesh used by STL/3MF export."""
         self.result = result; self.colours = colours or self.colours; self._render_error = None
         if result is None:
@@ -155,7 +187,7 @@ class MeshView(QWidget):
             face_height = self._vertices[self._faces, 2].mean(axis=1)
             height_span = max(float(face_height.max() - face_height.min()), 1e-12)
             self._height_tone = (face_height - face_height.min()) / height_span
-            self._relief_texture = relief_shading_texture(result.relief_map)
+            self._relief_texture = colour_relief_texture(surface_pixels, result.relief_map) if surface_pixels is not None else relief_shading_texture(result.relief_map)
             field = np.asarray(result.relief_map, np.float64)
             relief_low, relief_high = result.ridge_height_range
             field_low, field_high = float(field.min()), float(field.max())
@@ -174,6 +206,13 @@ class MeshView(QWidget):
                 np.float64,
             )
             for array in (self._vertices, self._faces, self._normals, self._raised, self._height_tone, self._texture_corners): array.flags.writeable = False
+        self.update()
+
+    def set_surface_texture(self, pixels: np.ndarray | None) -> None:
+        """Change colour representation without touching geometry or camera."""
+        if self.result is None:
+            return
+        self._relief_texture = relief_shading_texture(self.result.relief_map) if pixels is None else colour_relief_texture(pixels, self.result.relief_map)
         self.update()
 
     def set_colours(self, colours: ReliefColours) -> None:

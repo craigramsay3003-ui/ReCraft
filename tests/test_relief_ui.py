@@ -1,4 +1,4 @@
-"""Headless checks for the minimal relief workspace and worker."""
+"""Headless checks for the ReCraft Portrait Relief workspace and viewer."""
 
 import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -9,10 +9,17 @@ import numpy as np
 import pytest
 
 from recraft.relief.mesh import build_relief_mesh
-from recraft.relief.presets import ReliefSettings, ReliefStyle
+from recraft.core_engine import ColourMode, CoreSettings, DetailLevel, render_core
 from recraft.ui.main_window import MainWindow
-from recraft.ui.mesh_view import MAX_RENDER_FACES, MeshView, build_coherent_render_surface, relief_shading_texture
-from recraft.ui.relief_worker import ReliefWorker
+from recraft.ui.mesh_view import (
+    MAX_RENDER_FACES,
+    MeshView,
+    build_coherent_render_surface,
+    colour_relief_texture,
+    relief_shading_texture,
+)
+from recraft.ui.core_worker import CoreWorker
+from recraft.relief.presets import ReliefSettings
 
 
 @pytest.fixture(scope="module")
@@ -29,29 +36,37 @@ def test_workspace_fits_laptop_and_advanced_is_hidden(app: QApplication) -> None
     window.close()
 
 
-def test_style_change_marks_preview_stale_and_camera_does_not(app: QApplication) -> None:
+def test_detail_change_marks_preview_stale_and_camera_does_not(app: QApplication) -> None:
     window = MainWindow(); window.source_image = Image.new("RGB", (180, 120), "white"); window._refresh_prepared(); window.preview_up_to_date = True
-    window.style_combo.setCurrentIndex(window.style_combo.findData(ReliefStyle.GRAPHIC)); assert not window.preview_up_to_date
+    window.detail_combo.setCurrentIndex(window.detail_combo.findData(DetailLevel.FINE)); assert not window.preview_up_to_date
     window.preview_up_to_date = True; window.mesh_view.camera.orbit(10, 5); window.mesh_view.camera.zoom(.9); window.mesh_view.camera.pan(.1, .1)
     assert window.preview_up_to_date and window._thread is None
     window.close()
 
 
-def test_worker_generates_reliable_preview_and_reports_progress() -> None:
+def test_worker_generates_reliable_preview_and_reports_progress(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Logger:
+        def info(self, *args: object, **kwargs: object) -> None: pass
+        def exception(self, *args: object, **kwargs: object) -> None: pass
+
+    monkeypatch.setattr("recraft.ui.core_worker.get_diagnostic_logger", lambda: Logger())
     image = Image.new("RGB", (180, 120), "#777777"); stages: list[str] = []; results: list[object] = []; errors: list[str] = []
-    worker = ReliefWorker(image, ReliefSettings(preview_resolution=100)); worker.stage_changed.connect(lambda stage, value: stages.append(stage)); worker.preview_ready.connect(lambda image, heights, result: results.append(result)); worker.failed.connect(errors.append); worker.run()
-    assert not errors and results and results[0].watertight and len(stages) >= 3
+    worker = CoreWorker(image, CoreSettings(preview_resolution=96)); worker.stage_changed.connect(lambda stage, value: stages.append(stage)); worker.preview_ready.connect(results.append); worker.failed.connect(errors.append); worker.run()
+    assert not errors and results and results[0].mesh.result.watertight and len(stages) >= 6
 
 
-def test_worker_accepts_style_value_from_qt_combo_box() -> None:
-    image = Image.new("RGB", (120, 90), "#777777")
-    errors: list[str] = []
-    results: list[object] = []
-    worker = ReliefWorker(image, ReliefSettings(style="Portrait Relief", preview_resolution=80))
-    worker.preview_ready.connect(lambda image, heights, result: results.append(result))
-    worker.failed.connect(errors.append)
-    worker.run()
-    assert not errors and results
+def test_preview_colour_change_does_not_regenerate_geometry(app: QApplication) -> None:
+    window = MainWindow()
+    window.source_image = Image.new("RGB", (120, 120), "#778899")
+    window._refresh_prepared()
+    result = render_core(window.prepared_image, CoreSettings(preview_resolution=96))
+    window._preview_ready(result)
+    vertices = window.mesh_view._vertices
+    window.colour_combo.setCurrentIndex(window.colour_combo.findData(ColourMode.ORIGINAL))
+    assert window.preview_up_to_date
+    assert window.mesh_view._vertices is vertices
+    assert window._thread is None
+    window.close()
 
 
 def test_mesh_preview_is_a_coherent_complete_surface(app: QApplication) -> None:
@@ -87,9 +102,25 @@ def test_full_height_map_texture_retains_detail() -> None:
     assert np.ptp(pixels) > 80
 
 
+def test_colour_texture_is_aligned_and_camera_independent(app: QApplication) -> None:
+    values = np.tile(np.linspace(0, 1, 96, dtype=np.float32), (96, 1))
+    result = build_relief_mesh(values, ReliefSettings(preview_resolution=96), preview=True)
+    colours = np.zeros((96, 96, 3), np.uint8)
+    colours[:, :48] = (240, 20, 10)
+    colours[:, 48:] = (10, 20, 240)
+    texture = colour_relief_texture(colours, values)
+    view = MeshView(); view.set_mesh(result, surface_pixels=colours)
+    vertices, faces, texture_key = view._vertices, view._faces, view._relief_texture.cacheKey()
+    view.camera.orbit(15, 7); view.camera.zoom(.9); view.camera.pan(.1, -.1)
+    assert view._vertices is vertices and view._faces is faces
+    assert view._relief_texture.cacheKey() == texture_key
+    pixels = np.frombuffer(texture.bits(), np.uint8).reshape(texture.height(), texture.bytesPerLine())
+    assert pixels[:, : texture.width() * 3 // 2].mean() != pixels[:, texture.width() * 3 // 2 : texture.width() * 3].mean()
+
+
 def test_failure_state_preserves_last_valid_result(app: QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("recraft.ui.main_window.QMessageBox.critical", lambda *args, **kwargs: None)
-    window = MainWindow(); marker = object(); window.relief_result = marker; window.preview_up_to_date = True
+    window = MainWindow(); marker = object(); window.core_result = marker; window.preview_up_to_date = True
     window._generation_failed("synthetic failure")
-    assert window.relief_result is marker and "previous preview preserved" in window.state_label.text().lower()
+    assert window.core_result is marker and "previous preview preserved" in window.state_label.text().lower()
     window.close()
