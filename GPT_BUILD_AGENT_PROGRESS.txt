@@ -714,3 +714,62 @@ Full-detail shading validation and replacement build:
   the coherent orbitable plaque.
 - dist/ReCraft/ReCraft.exe — 10,676,961 bytes.
 - dist/ReCraft-Setup.exe — 95,304,922 bytes.
+
+RECRAFT CORE COLOUR RELIEF — 15 JULY 2026
+
+Created `feature/recraft-core-colour-relief` from the latest remote
+`feature/printable-relief-reset` at
+`dea79491f621d00bbeba15ae946a29b8b03a659c`. Stable main was not checked out,
+modified, merged, or advanced.
+
+The default product is now one ReCraft Portrait Relief workflow. A new typed
+`recraft.core_engine` pipeline separates prepared pixels, honest subject
+analysis/fallback, normalised feature importance, print-aware artistic
+simplification, positive ReliefField, aligned ColourMap, and watertight
+ReliefMesh. It merges broad tones, removes sub-print regions, reinforces
+supported subject/silhouette structure, and keeps background relief lower. It
+does not claim arbitrary semantic recognition.
+
+The UI now has persistent source and relief previews with compact Subject
+Emphasis, Background, Detail, physical size, colour mode, Generate, STL, and
+3MF controls. Advanced physical controls are collapsed. Original Colour,
+cleaned/lockable 2–6 colour Artistic Palette, and matte Monochrome can switch
+without regenerating geometry or disturbing the camera. STL is explicitly
+geometry-only. 3MF uses one watertight object with limited material assignments.
+
+Added a deterministic fictional 1024 x 1024 face benchmark and generator. Its
+left-heavy hair and right-only earring detect mirroring; facial features,
+neckline, broad tones, and coherent colours test relief and palette reduction.
+No private or AI-generated image is included.
+
+Validation completed:
+
+- 104 automated tests passed in 7.47 seconds during the release build.
+- Compilation/import and off-screen 1366 x 768 construction passed.
+- Generate and both export actions were reachable; Advanced was hidden.
+- Preview benchmark: 144,396 triangles, watertight, under 0.3 seconds locally.
+- Final benchmark: 336,396 triangles, 160 x 160 x 3.3 mm, watertight.
+- Final render 0.30 s; STL write 0.06 s; 3MF write 5.56 s locally.
+- STL reloaded watertight with Z=0 rear and correct dimensions.
+- 3MF validated as millimetres, one object, five materials, 336,396 triangles.
+- Exact packaged executable passed an off-screen startup smoke test.
+- `dist/ReCraft/ReCraft.exe` — 10,706,314 bytes.
+- `dist/ReCraft-Setup.exe` — 95,335,546 bytes.
+- Test files: `artifacts/ReCraft-Core-Benchmark-160mm.stl` and `.3mf`.
+
+Visual synthetic assessment: the silhouette, asymmetric hair, eyes, nose,
+smile, and neckline are locatable in monochrome; the four-colour palette is
+coherent and correctly oriented. Bambu Studio import/slicing and private
+portrait/pet/car checks were not performed or claimed and remain manual tasks.
+
+Exact local commands after this branch is pushed:
+
+  git fetch origin
+  git switch feature/recraft-core-colour-relief
+  git pull
+  .\.venv\Scripts\python.exe -m pip install -e ".[dev,build]"
+  .\.venv\Scripts\python.exe -m pytest
+  .\.venv\Scripts\python.exe -m recraft
+
+PowerShell activation is not required. Never commit/package private photographs
+or their filenames.

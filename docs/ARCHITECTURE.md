@@ -129,6 +129,17 @@ brightness bands, removes tiny loops, and reinforces important edges; Halftone
 uses local normalization and adaptive dot spacing/sizing. The developer dropdown
 renders reusable maps without changing PNG export behavior.
 
+## ReCraft Core Portrait Relief
+
+The experimental core package separates `PreparedImageData`,
+`SubjectAnalysisData`, `FeatureImportanceData`,
+`ArtisticSimplificationData`, `ReliefFieldData`, `ColourMapData`, and
+`ReliefMeshData`. Simplification translates evidence into broad printable form
+before height is assigned. A structured positive plaque mesh then receives an
+independent aligned colour map. Camera and colour changes operate only on
+immutable preview buffers; export regenerates the same pipeline at final
+resolution. See `docs/RECRAFT_CORE.md`.
+
 ## Future exporters and mesh generation
 
 Exporters should consume processing results without depending on the UI. Vector exporters can initially consume style-specific paths, while a later geometry layer can translate depth maps or procedural primitives into validated meshes. Keeping these layers separate prevents manufacturing concerns from complicating image interpretation.

@@ -1,6 +1,20 @@
 # ReCraft
 
-**Create the impossible.**
+**ReCraft interprets photographs and rebuilds them as distinctive printable artwork. Portrait Relief is the first physical style.**
+
+## ReCraft Portrait Relief (experimental branch)
+
+`feature/recraft-core-colour-relief` proves one focused workflow for a person,
+pet, or vehicle against a simple background: open and frame the image, choose
+Subject Emphasis, Background treatment, Detail, physical width and relief depth,
+generate once, inspect the colour-mapped relief, then export STL or 3MF.
+
+The persistent source and relief previews dominate a responsive workspace.
+Colour can switch between Original Colour, a cleaned 2/3/4/6-colour Artistic
+Palette, and matte Monochrome without rebuilding geometry. Advanced physical
+settings are collapsed by default. See [ReCraft Core](docs/RECRAFT_CORE.md),
+[Colour Relief](docs/COLOUR_RELIEF.md), and
+[Benchmark Images](docs/BENCHMARK_IMAGES.md).
 
 ## Printable relief reset (experimental branch)
 

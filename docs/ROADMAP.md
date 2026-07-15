@@ -56,3 +56,13 @@ selection, painting, diagnostic dashboards, or additional art styles.
 The branch must remain experimental until a private golden-image print is
 inspected in Bambu Studio and physically printed. The private photograph, its
 filename, and screenshots must never enter the repository or package.
+
+## ReCraft core colour relief branch
+
+`feature/recraft-core-colour-relief` builds on the printable reset with one
+production-facing style: ReCraft Portrait Relief. This milestone adds a typed
+interpretation-to-physical-design pipeline, explicit artistic simplification,
+aligned Original/Palette/Monochrome colour maps, a deterministic synthetic face
+benchmark, and a geometry-first limited-palette 3MF. Semantic descriptions,
+arbitrary full-colour filament output, extra production styles, pet/car
+benchmarks, and automatic slicer validation remain future work.
