@@ -20,3 +20,4 @@ artifacts/
 *.png
 !docs/**/*.png
 !examples/**/*.png
+!tests/assets/*.png
